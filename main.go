@@ -155,7 +155,19 @@ func getResponse(m *discordgo.MessageCreate, userInput string) string {
 				user.hand = append(user.hand, user.deck[len(user.deck)-1])
 				user.deck = user.deck[:len(user.deck)-1]
 
+				fmt.Println(user.hand)
 				return user.hand[len(user.hand)-1] + inversion
+			}
+		}
+	case "reset deck":
+		initDeck(m)
+		for _, user := range userCards {
+			if user.ID == m.Author.ID {
+				user.deck = append(user.hand, user.deck...)
+				clear(user.hand)
+				fmt.Println(user.hand)
+				tarotShuffle(user.deck)
+				return "Deck reset."
 			}
 		}
 	}
