@@ -328,7 +328,11 @@ func initDeck(m *discordgo.MessageCreate) {
 		"Ten of Cups",
 	}
 	tarotShuffle(newUser.deck)
-	userCards = append(userCards, &newUser) //78uuuuuuuuuuuuuuuuu
+	userCards = append(userCards, &newUser)
+
+	//Rust suggests
+	//78uuuuuuuuuuuuuuuuu
+
 	fmt.Println("Appended new user to usercards", newUser.ID)
 	fmt.Print(userCards)
 }
