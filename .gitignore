@@ -1,1 +1,2 @@
 src/config/config.go
+pkg/config/config.go

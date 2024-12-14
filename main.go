@@ -9,9 +9,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Lizthejester/LizianTime/pkg/ltime"
 	"github.com/bwmarrin/discordgo"
+	"github.com/lizthejester/lizbotgo/pkg/roll"
 	"github.com/lizthejester/lizbotgo/src/config"
-	"github.com/lizthejester/lizbotgo/src/ltime"
 	"golang.org/x/exp/rand"
 )
 
@@ -107,26 +108,8 @@ func getResponse(m *discordgo.MessageCreate, userInput string) string {
 	}
 
 	// rolling
-	if len(lowered) > 8 {
-		if lowered[0:8] == "roll a d" {
-			rand.Seed(uint64(time.Now().UnixNano()))
-			switch lowered[8:] {
-			case "4":
-				return "You rolled:" + strconv.Itoa(rand.Intn(4)+1)
-			case "6":
-				return "You rolled:" + strconv.Itoa(rand.Intn(6)+1)
-			case "8":
-				return "You rolled:" + strconv.Itoa(rand.Intn(8)+1)
-			case "10":
-				return "You rolled:" + strconv.Itoa(rand.Intn(10)+1)
-			case "12":
-				return "You rolled:" + strconv.Itoa(rand.Intn(12)+1)
-			case "20":
-				return "You rolled:" + strconv.Itoa(rand.Intn(20)+1)
-			default:
-				return "I don't have that die! :("
-			}
-		}
+	if strings.HasPrefix(lowered, "roll a d") {
+		return roll.RollDice(lowered[8:])
 	}
 	// coin flip
 	if lowered == "flip a coin" {

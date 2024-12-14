@@ -1,3 +1,5 @@
+github.com/Lizthejester/LizianTime v0.0.0-20241214181930-415a623358fc h1:agsBF9ik15w6v59wbcJWwk10DsvBnyYi/pinFYNomrA=
+github.com/Lizthejester/LizianTime v0.0.0-20241214181930-415a623358fc/go.mod h1:OUMmC/fDWmvcx63MqTHO42LtXehcnHSn7m2HmJ5L6Es=
 github.com/bwmarrin/discordgo v0.28.1 h1:gXsuo2GBO7NbR6uqmrrBDplPUx2T3nzu775q/Rd1aG4=
 github.com/bwmarrin/discordgo v0.28.1/go.mod h1:NJZpH+1AfhIcyQsPeuBKsUtYrRnjkyu0kIVMCHkZtRY=
 github.com/gorilla/websocket v1.4.2 h1:+/TMaTYc4QFitKJxsQ7Yye35DkWvkdLcvGKqM+x0Ufc=
