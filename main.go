@@ -11,8 +11,10 @@ import (
 
 	"github.com/Lizthejester/LizianTime/pkg/ltime"
 	"github.com/bwmarrin/discordgo"
+	"github.com/lizthejester/lizbotgo/pkg/config"
+	"github.com/lizthejester/lizbotgo/pkg/inspire"
 	"github.com/lizthejester/lizbotgo/pkg/roll"
-	"github.com/lizthejester/lizbotgo/src/config"
+	"github.com/lizthejester/lizbotgo/pkg/vote"
 	"golang.org/x/exp/rand"
 )
 
@@ -40,7 +42,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	userMessage = userMessage[1:]
 	fmt.Println(userMessage)
 	fmt.Println("getting response")
-	response := getResponse(m, userMessage)
+	response := getResponse(s, m, userMessage)
 	if response == "" {
 		s.ChannelMessageSend(m.ChannelID, "sorry, I don't know that command! :)")
 	} else {
@@ -48,7 +50,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
-func getResponse(m *discordgo.MessageCreate, userInput string) string {
+func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput string) string {
 	lowered := strings.ToLower(userInput)
 	fmt.Println(lowered)
 
@@ -66,14 +68,14 @@ func getResponse(m *discordgo.MessageCreate, userInput string) string {
 	//chat
 	switch lowered {
 	case "hello", "hi", "hihi", "howdy", "hiya", "hey", "greetings", "yo", "salutations":
-		greetings := [...]string{"Hello there", "Hi", "Greetings", "Hihi", "Howdy", "Yo", "Salutations"}
+		greetings := []string{"Hello there", "Hi", "Greetings", "Hihi", "Howdy", "Yo", "Salutations"}
 		return greetings[rand.Intn(len(greetings))]
 	case "goodbye", "bye", "see ya", "later", "see ya later", "see you later", "bye bye", "byebye":
-		goodbyes := [...]string{"farewell Traveler!", "farewell!", "later! ^-^", "see ya! :3", "Bye!", "Bye now! ^-^", "byebye! ^-^"}
+		goodbyes := []string{"farewell Traveler!", "farewell!", "later! ^-^", "see ya! :3", "Bye!", "Bye now! ^-^", "byebye! ^-^"}
 		return goodbyes[rand.Intn(len(goodbyes))]
 	case "magic 8ball", "magic8ball":
 		rand.Seed(uint64(time.Now().UnixNano()))
-		ballResp := [...]string{"Yes, definitely",
+		ballResp := []string{"Yes, definitely",
 			"It is certain",
 			"Without a doubt",
 			"You may rely on it",
@@ -95,7 +97,7 @@ func getResponse(m *discordgo.MessageCreate, userInput string) string {
 			"Concentrate and ask again"}
 		return ballResp[rand.Intn(len(ballResp))]
 	case "tell me a joke", "joke", "tell a joke", "what's a good joke", "what's a good joke?", "know any jokes", "know a good joke?":
-		jokes := [...]string{"What do kids play when their mom is using the phone? Bored games.",
+		jokes := []string{"What do kids play when their mom is using the phone? Bored games.",
 			"What do you call an ant who fights crime? A vigilANTe!",
 			"Why did the teddy bear say no to dessert? Because she was stuffed.",
 			"Why did the scarecrow win a Nobel prize? Because she was outstanding in her field.",
@@ -116,6 +118,22 @@ func getResponse(m *discordgo.MessageCreate, userInput string) string {
 		coinResults := [2]string{"heads", "tails"}
 		return coinResults[rand.Intn(len(coinResults))]
 	}
+	// hold a vote
+	if strings.HasPrefix(lowered, "hold a vote") {
+		if len(lowered) > 11 {
+			resp, err := vote.HoldAVote(s, m, userInput[12:])
+			if err != nil {
+				fmt.Println(err)
+			}
+			return resp
+		} else {
+			return "Hold a vote on what?"
+		}
+	}
+	// quotes
+	if lowered == "inspire" {
+		return inspire.GetQuote()
+	}
 
 	// tarot
 	switch lowered {
@@ -133,26 +151,23 @@ func getResponse(m *discordgo.MessageCreate, userInput string) string {
 		if rand.Intn(2) == 1 {
 			inversion = " inverted"
 		}
-		for _, user := range userCards {
-			if user.ID == m.Author.ID {
-				user.hand = append(user.hand, user.deck[len(user.deck)-1])
-				user.deck = user.deck[:len(user.deck)-1]
 
-				fmt.Println(user.hand)
-				return user.hand[len(user.hand)-1] + inversion
-			}
-		}
+		user := userCards[m.Author.ID]
+		user.hand = append(user.hand, user.deck[len(user.deck)-1])
+		user.deck = user.deck[:len(user.deck)-1]
+
+		fmt.Println(user.hand)
+		return user.hand[len(user.hand)-1] + inversion
+
 	case "reset deck":
 		initDeck(m)
-		for _, user := range userCards {
-			if user.ID == m.Author.ID {
-				user.deck = append(user.hand, user.deck...)
-				clear(user.hand)
-				fmt.Println(user.hand)
-				tarotShuffle(user.deck)
-				return "Deck reset."
-			}
-		}
+
+		user := userCards[m.Author.ID]
+		user.deck = append(user.hand, user.deck...)
+		user.hand = []string{}
+		tarotShuffle(user.deck)
+
+		return "Deck reset."
 	}
 
 	//Miss Amie suggests
@@ -166,59 +181,57 @@ func getResponse(m *discordgo.MessageCreate, userInput string) string {
 	fmt.Println(sc.Text())*/
 
 	// calendar
-	if len(lowered) > 6 {
-		if lowered[0:7] == "lizdate" {
-			if len(lowered) == 7 {
-				currentYear, currentMonth, currentDay := time.Now().Date()
-				lizMonth, lizDay := ltime.GetDayMonth(currentYear, currentMonth.String(), currentDay)
-				fmt.Println("Current date:", lizMonth, lizDay, ltime.GetDayOfWeek(lizDay, lizMonth))
-				response := "Current date: " + strconv.Itoa(lizDay) + " " + lizMonth + ", " + ltime.GetDayOfWeek(lizDay, lizMonth)
-				return response
-			} else {
-				var firstSpaceIndex int
-				var secondSpaceIndex int
-				for i := 8; firstSpaceIndex == 0 && i < len(lowered); i++ {
-					if string(lowered[i]) == " " {
-						firstSpaceIndex = i
-					}
-					if i == len(lowered) {
-						return "That command looks wrong"
-					}
-				}
-				for i := firstSpaceIndex + 1; secondSpaceIndex == 0 && i < len(lowered); i++ {
-					if string(lowered[i]) == " " {
-						secondSpaceIndex = i
-					}
-					if i == len(lowered) {
-						return "That command looks wrong"
-					}
-				}
-				if firstSpaceIndex == 0 || secondSpaceIndex == 0 {
-					return "That command looks wrong"
-				}
-				gregDay, err := strconv.Atoi(lowered[8:(firstSpaceIndex)])
-				if err != nil {
-					return "Formatting error; First argument should be a number (Day)"
-				}
-				fmt.Println("gregday:", gregDay)
-				gregMonth := userInput[(firstSpaceIndex + 1):(secondSpaceIndex)]
-				switch gregMonth {
-				case "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December":
+	if strings.HasPrefix(lowered, "lizdate") {
+		if len(lowered) == 7 {
+			currentYear, currentMonth, currentDay := time.Now().Date()
+			lizMonth, lizDay := ltime.GetDayMonth(currentYear, currentMonth.String(), currentDay)
+			fmt.Println("Current date:", lizMonth, lizDay, ltime.GetDayOfWeek(lizDay, lizMonth))
+			response := "Current date: " + strconv.Itoa(lizDay) + " " + lizMonth + ", " + ltime.GetDayOfWeek(lizDay, lizMonth)
+			return response
+		}
 
-				default:
-					return "Formatting error; Second argument should be a Gregorian month (i.e. January)"
-				}
-				fmt.Println("gregmonth:", gregMonth)
-				gregYear, err2 := strconv.Atoi(lowered[(secondSpaceIndex + 1):])
-				if err2 != nil {
-					return "Formatting error; Third argument should be a number (Year)"
-				}
-				fmt.Println("gregyear:", gregYear)
-				lizMonth, lizDay := ltime.GetDayMonth(gregYear, gregMonth, gregDay)
-				response := strconv.Itoa(lizDay) + " " + lizMonth + ", " + ltime.GetDayOfWeek(lizDay, lizMonth)
-				return response
+		var firstSpaceIndex int
+		var secondSpaceIndex int
+		for i := 8; firstSpaceIndex == 0 && i < len(lowered); i++ {
+			if string(lowered[i]) == " " {
+				firstSpaceIndex = i
+			}
+			if i == len(lowered) {
+				return "That command looks wrong"
 			}
 		}
+		for i := firstSpaceIndex + 1; secondSpaceIndex == 0 && i < len(lowered); i++ {
+			if string(lowered[i]) == " " {
+				secondSpaceIndex = i
+			}
+			if i == len(lowered) {
+				return "That command looks wrong"
+			}
+		}
+		if firstSpaceIndex == 0 || secondSpaceIndex == 0 {
+			return "That command looks wrong"
+		}
+		gregDay, err := strconv.Atoi(lowered[8:(firstSpaceIndex)])
+		if err != nil {
+			return "Formatting error; First argument should be a number (Day)"
+		}
+		fmt.Println("gregday:", gregDay)
+		gregMonth := userInput[(firstSpaceIndex + 1):(secondSpaceIndex)]
+		switch gregMonth {
+		case "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December":
+
+		default:
+			return "Formatting error; Second argument should be a Gregorian month (i.e. January)"
+		}
+		fmt.Println("gregmonth:", gregMonth)
+		gregYear, err2 := strconv.Atoi(lowered[(secondSpaceIndex + 1):])
+		if err2 != nil {
+			return "Formatting error; Third argument should be a number (Year)"
+		}
+		fmt.Println("gregyear:", gregYear)
+		lizMonth, lizDay := ltime.GetDayMonth(gregYear, gregMonth, gregDay)
+		response := strconv.Itoa(lizDay) + " " + lizMonth + ", " + ltime.GetDayOfWeek(lizDay, lizMonth)
+		return response
 	}
 	fmt.Println("response got")
 	return ""
@@ -230,7 +243,8 @@ type User struct {
 	deck []string
 }
 
-var userCards []*User
+// =============== v key   v value
+var userCards map[string]*User
 
 // Initialize deck
 func initDeck(m *discordgo.MessageCreate) {
@@ -239,6 +253,11 @@ func initDeck(m *discordgo.MessageCreate) {
 			return
 		}
 	}
+	_, exists := userCards[m.Author.ID]
+	if exists {
+		return
+	}
+
 	var newUser User
 	newUser.ID = m.Author.ID
 	newUser.hand = []string{}
@@ -323,7 +342,7 @@ func initDeck(m *discordgo.MessageCreate) {
 		"Ten of Cups",
 	}
 	tarotShuffle(newUser.deck)
-	userCards = append(userCards, &newUser)
+	userCards[m.Author.ID] = &newUser
 
 	//Rust suggests
 	//78uuuuuuuuuuuuuuuuu
