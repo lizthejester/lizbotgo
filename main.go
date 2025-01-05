@@ -14,6 +14,7 @@ import (
 	"github.com/lizthejester/lizbotgo/pkg/config"
 	"github.com/lizthejester/lizbotgo/pkg/inspire"
 	"github.com/lizthejester/lizbotgo/pkg/roll"
+	"github.com/lizthejester/lizbotgo/pkg/user"
 	"github.com/lizthejester/lizbotgo/pkg/vote"
 	"golang.org/x/exp/rand"
 )
@@ -21,6 +22,8 @@ import (
 type Lizbot struct {
 	Name string `json:"Lizbot"`
 }
+
+var UserManager *user.UserManager = user.NewManager()
 
 // This function will be called (due to AddHandler above) every time a new
 // message is created on any channel that the authenticated bot has access to.
@@ -51,6 +54,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput string) string {
+	user := UserManager.GetUser(m.Author.ID)
 	lowered := strings.ToLower(userInput)
 	fmt.Println(lowered)
 
@@ -138,34 +142,17 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 	// tarot
 	switch lowered {
 	case "shuffle":
-		initDeck(m)
-		for _, user := range userCards {
-			if user.ID == m.Author.ID {
-				tarotShuffle(user.deck)
-				return "Shuffled!"
-			}
-		}
+		user.TarotDeck.TarotShuffle()
+		return "Shuffled!"
+
 	case "draw":
-		initDeck(m)
-		var inversion string
-		if rand.Intn(2) == 1 {
-			inversion = " inverted"
-		}
+		deck := user.TarotDeck
+		card := deck.Draw()
 
-		user := userCards[m.Author.ID]
-		user.hand = append(user.hand, user.deck[len(user.deck)-1])
-		user.deck = user.deck[:len(user.deck)-1]
-
-		fmt.Println(user.hand)
-		return user.hand[len(user.hand)-1] + inversion
+		return card
 
 	case "reset deck":
-		initDeck(m)
-
-		user := userCards[m.Author.ID]
-		user.deck = append(user.hand, user.deck...)
-		user.hand = []string{}
-		tarotShuffle(user.deck)
+		user.TarotDeck.ResetDeck()
 
 		return "Deck reset."
 	}
@@ -233,130 +220,13 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 		response := strconv.Itoa(lizDay) + " " + lizMonth + ", " + ltime.GetDayOfWeek(lizDay, lizMonth)
 		return response
 	}
+
+	if strings.HasPrefix(lowered, "set alarm") {
+		alarm := user.SetAlarm()
+	}
+
 	fmt.Println("response got")
 	return ""
-}
-
-type User struct {
-	ID   string
-	hand []string
-	deck []string
-}
-
-// =============== v key   v value
-var userCards map[string]*User
-
-// Initialize deck
-func initDeck(m *discordgo.MessageCreate) {
-	for _, user := range userCards {
-		if user.ID == m.Author.ID {
-			return
-		}
-	}
-	_, exists := userCards[m.Author.ID]
-	if exists {
-		return
-	}
-
-	var newUser User
-	newUser.ID = m.Author.ID
-	newUser.hand = []string{}
-	newUser.deck = []string{
-		"The Fool(0)",
-		"The Magician(I)",
-		"The High Priestess(II)",
-		"The Empress(III)",
-		"The Emporer(IV)",
-		"The Heirophant(V)",
-		"The Lovers(VI)",
-		"The Chariot(VII)",
-		"Strength(VIII)",
-		"The Hermit(IX)",
-		"Wheel of Fortune(X)",
-		"Justice(XI)",
-		"The Hanged Man(XII)",
-		"Death(XIII)",
-		"Temperance(XIV)",
-		"The Devil(XV)",
-		"The Tower(XVI)",
-		"The Star(XVII)",
-		"The Moon(XVIII)",
-		"The Sun(XIX)",
-		"Judgement(XX)",
-		"The World(XXI)",
-		"King of Swords",
-		"Queen of Swords",
-		"Knight of Swords",
-		"Page of Swords",
-		"One of Swords",
-		"Two of Swords",
-		"Three of Swords",
-		"Four of Swords",
-		"Five of Swords",
-		"Six of Swords",
-		"Seven of Swords",
-		"Eight of Swords",
-		"Nine of Swords",
-		"Ten of Swords",
-		"King of Batons",
-		"Queen of Batons",
-		"Knight of Batons",
-		"Page of Batons",
-		"One of Batons",
-		"Two of Batons",
-		"Three of Batons",
-		"Four of Batons",
-		"Five of Batons",
-		"Six of Batons",
-		"Seven of Batons",
-		"Eight of Batons",
-		"Nine of Batons",
-		"Ten of Batons",
-		"King of Coins",
-		"Queen of Coins",
-		"Knight of Coins",
-		"Page of Coins",
-		"One of Coins",
-		"Two of Coins",
-		"Three of Coins",
-		"Four of Coins",
-		"Five of Coins",
-		"Six of Coins",
-		"Seven of Coins",
-		"Eight of Coins",
-		"Nine of Coins",
-		"Ten of Coins",
-		"King of Cups",
-		"Queen of Cups",
-		"Knight of Cups",
-		"Page of Cups",
-		"One of Cups",
-		"Two of Cups",
-		"Three of Cups",
-		"Four of Cups",
-		"Five of Cups",
-		"Six of Cups",
-		"Seven of Cups",
-		"Eight of Cups",
-		"Nine of Cups",
-		"Ten of Cups",
-	}
-	tarotShuffle(newUser.deck)
-	userCards[m.Author.ID] = &newUser
-
-	//Rust suggests
-	//78uuuuuuuuuuuuuuuuu
-
-	fmt.Println("Appended new user to usercards", newUser.ID)
-	fmt.Print(userCards)
-}
-
-func tarotShuffle(deck []string) {
-	rand.Seed(uint64(time.Now().UnixNano()))
-	for i := len(deck) - 1; i > 0; i-- {
-		j := rand.Intn(i + 1)
-		deck[i], deck[j] = deck[j], deck[i]
-	}
 }
 
 var s *discordgo.Session
