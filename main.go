@@ -228,7 +228,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 	//example command: "set alarm for (day) (month) (year) (time + timezone) (name) (comment string)"
 	if strings.HasPrefix(lowered, "set alarm for") {
 		//TODO: Parse Deadline
-		wrongSyntaxMessage := "Syntax is 01 30 2006 03:04PM -0800 \"Name\" Description"
+		wrongSyntaxMessage := "Syntax is: 01 30 2006 03:04PM -0800 \"Name\" Description"
 
 		if len(lowered) > 14 {
 			firstSpaceIndex := 0
