@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 	"os/signal"
@@ -8,6 +9,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 
 	"github.com/Lizthejester/LizianTime/pkg/ltime"
 	"github.com/bwmarrin/discordgo"
@@ -312,7 +315,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			}
 
 			s.ChannelMessageSend(m.ChannelID, alarmName+" set for "+dline)
-			user.AlarmManager.SetAlarm(alm)
+			UserManager.GetUser(m.Author.ID).AlarmManager.SetAlarm(alm)
 			return alarmName + " went off!"
 		} else {
 			return wrongSyntaxMessage
@@ -323,10 +326,45 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 	return ""
 }
 
+func SaveAlarms() {
+	emptiedTime, err := time.Parse("01 02 2006 03:04PM -0700", "01 02 2006 03:04PM -0700")
+	if err != nil {
+		fmt.Println(err)
+	}
+	db, err := sql.Open("sqlite3", "./lizbot.db")
+	if err != nil {
+		fmt.Println(err)
+	}
+	for _, user := range UserManager.GetAllUsers() {
+		for i, thisAlarm := range user.AlarmManager.GetAlarms() {
+			if thisAlarm.Deadline == emptiedTime {
+				user.AlarmManager.Alarms = append(user.AlarmManager.Alarms[:i], user.AlarmManager.Alarms[i+1:]...)
+			} else {
+				_, err = db.Exec("insert into alarms(name, time, comment, channelid, userid) values('" + thisAlarm.Name + "', '" + thisAlarm.Deadline.String() + "', '" + thisAlarm.Content + "', '" + thisAlarm.ChannelID + "', '" + user.UserID + "')")
+				if err != nil {
+					fmt.Println(err)
+				}
+			}
+		}
+	}
+	db.Close()
+}
+
 var s *discordgo.Session
 
 func main() {
-	var err error
+	db, err := sql.Open("sqlite3", "./lizbot.db")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	sqlstatement := "create table alarms (id integer not null primary key, name text, time text, comment text, channelid text, userid text)"
+	_, err = db.Exec(sqlstatement)
+	if err != nil {
+		fmt.Println(err)
+	}
+	db.Close()
+
 	s, err = discordgo.New("Bot " + config.DISCORD_KEY)
 	if err != nil {
 		fmt.Printf("Invalid bot parameters: %v", err)
@@ -350,6 +388,7 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 
+	SaveAlarms()
 	// Cleanly close down the Discord session.
 	s.Close()
 	//END
