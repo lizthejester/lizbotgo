@@ -11,6 +11,7 @@ import (
 
 	"github.com/Lizthejester/LizianTime/pkg/ltime"
 	"github.com/bwmarrin/discordgo"
+	"github.com/lizthejester/lizbotgo/pkg/alarm"
 	"github.com/lizthejester/lizbotgo/pkg/config"
 	"github.com/lizthejester/lizbotgo/pkg/inspire"
 	"github.com/lizthejester/lizbotgo/pkg/roll"
@@ -119,8 +120,8 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 	}
 	// coin flip
 	if lowered == "flip a coin" {
-		coinResults := [2]string{"heads", "tails"}
-		return coinResults[rand.Intn(len(coinResults))]
+		possCoinResults := [2]string{"heads", "tails"}
+		return possCoinResults[rand.Intn(len(possCoinResults))]
 	}
 	// hold a vote
 	if strings.HasPrefix(lowered, "hold a vote") {
@@ -221,8 +222,101 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 		return response
 	}
 
-	if strings.HasPrefix(lowered, "set alarm") {
-		alarm := user.SetAlarm()
+	//example command: "set alarm for (day) (month) (year) (time + timezone) (name) (comment string)"
+	if strings.HasPrefix(lowered, "set alarm for") {
+		//TODO: Parse Deadline
+		wrongSyntaxMessage := "Syntax is 01 30 2006 03:04PM -0800 \"Name\" Description"
+
+		if len(lowered) > 14 {
+			firstSpaceIndex := 0
+			secondSpaceIndex := 0
+			thirdSpaceIndex := 0
+			fourthSpaceIndex := 0
+			fifthSpaceIndex := 0
+			var alarmName string
+			var alarmComment string
+			var dline string
+			for i := 15; firstSpaceIndex == 0; i++ {
+				if string(lowered[i]) == " " {
+					firstSpaceIndex = i
+				}
+				if i == len(lowered) {
+					return wrongSyntaxMessage
+				}
+			}
+			for i := firstSpaceIndex + 1; secondSpaceIndex == 0; i++ {
+				if string(lowered[i]) == " " {
+					secondSpaceIndex = i
+				}
+				if i == len(lowered) {
+					return wrongSyntaxMessage
+				}
+			}
+			for i := secondSpaceIndex + 1; thirdSpaceIndex == 0; i++ {
+				if string(lowered[i]) == " " {
+					thirdSpaceIndex = i
+				}
+				if i == len(lowered) {
+					return wrongSyntaxMessage
+				}
+			}
+			for i := thirdSpaceIndex + 1; fourthSpaceIndex == 0; i++ {
+				if string(lowered[i]) == " " {
+					fourthSpaceIndex = i
+				}
+				if i == len(lowered) {
+					return wrongSyntaxMessage
+				}
+			}
+			for i := fourthSpaceIndex + 1; fifthSpaceIndex == 0; i++ {
+				if string(lowered[i]) == " " {
+					fifthSpaceIndex = i
+				}
+				if i == len(lowered) {
+					return wrongSyntaxMessage
+				}
+			}
+
+			secondQuotationMark := 0
+			if string(lowered[fifthSpaceIndex+1]) == "\"" {
+				for i := fifthSpaceIndex + 2; secondQuotationMark == 0; i++ {
+					if string(lowered[i]) == "\"" {
+						secondQuotationMark = i
+					}
+					if i == len(lowered) {
+						return wrongSyntaxMessage
+					}
+				}
+			} else {
+				return wrongSyntaxMessage + "this one"
+			}
+
+			alarmName = lowered[fifthSpaceIndex+2 : secondQuotationMark]
+			alarmComment = lowered[secondQuotationMark+1:]
+			dline = userInput[14:fifthSpaceIndex]
+
+			/*if firstSpaceIndex == 0 || secondSpaceIndex == 0 || thirdSpaceIndex == 0 {
+				return wrongSyntaxMessage
+			}*/
+
+			t, err := time.Parse("01 02 2006 03:04PM -0700", dline)
+			if err != nil {
+				return (err.Error())
+			}
+
+			alm := &alarm.Alarm{
+				ChannelID: m.ChannelID,
+				Deadline:  t,
+				Content:   alarmComment,
+				Name:      alarmName,
+			}
+
+			s.ChannelMessageSend(m.ChannelID, alarmName+" set for "+dline)
+			user.AlarmManager.SetAlarm(alm)
+			return alarmName + " went off!"
+		} else {
+			return wrongSyntaxMessage
+		}
 	}
 
 	fmt.Println("response got")

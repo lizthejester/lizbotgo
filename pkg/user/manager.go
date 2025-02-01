@@ -1,6 +1,7 @@
 package user
 
 import (
+	"github.com/lizthejester/lizbotgo/pkg/alarm"
 	"github.com/lizthejester/lizbotgo/pkg/deck"
 )
 
@@ -11,8 +12,8 @@ func NewManager() *UserManager {
 }
 
 type User struct {
-	Alarms    []Alarm
-	TarotDeck *deck.DeckManager
+	AlarmManager *alarm.AlarmManager
+	TarotDeck    *deck.DeckManager
 }
 
 type UserManager struct {
@@ -27,6 +28,7 @@ func (m *UserManager) GetUser(id string) *User {
 
 	newUser := &User{
 		TarotDeck: deck.InitDeck(),
+		//AlarmManager: alarm.InitAlarms(),
 	}
 
 	m.users[id] = newUser
