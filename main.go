@@ -15,6 +15,7 @@ import (
 	"github.com/Lizthejester/LizianTime/pkg/ltime"
 	"github.com/bwmarrin/discordgo"
 	"github.com/lizthejester/lizbotgo/pkg/alarm"
+	"github.com/lizthejester/lizbotgo/pkg/chanselect"
 	"github.com/lizthejester/lizbotgo/pkg/config"
 	"github.com/lizthejester/lizbotgo/pkg/inspire"
 	"github.com/lizthejester/lizbotgo/pkg/roll"
@@ -28,12 +29,15 @@ type Lizbot struct {
 }
 
 var UserManager *user.UserManager = user.NewManager()
+var ServerManager *chanselect.ServerManager = chanselect.NewServerManager()
 
 // This function will be called (due to AddHandler above) every time a new
 // message is created on any channel that the authenticated bot has access to.
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	userMessage := m.Content
-
+	if userMessage == "" {
+		return
+	}
 	// dont respond to self
 	if m.Author.ID == s.State.User.ID {
 		return
@@ -52,15 +56,23 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	response := getResponse(s, m, userMessage)
 	if response == "" {
 		s.ChannelMessageSend(m.ChannelID, "sorry, I don't know that command! :)")
+	} else if response == "No response" {
+		return
 	} else {
 		s.ChannelMessageSend(m.ChannelID, response)
 	}
 }
 
 func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput string) string {
-	user := UserManager.GetUser(m.Author.ID)
+	user := UserManager.GetUser(m.Author.ID, s, ServerManager)
 	lowered := strings.ToLower(userInput)
 	fmt.Println(lowered)
+
+	if lowered == "set main channel" {
+		ServerManager.GetServer(m.GuildID).SetChannel(m.ChannelID)
+		fmt.Println(ServerManager.GetServer(m.GuildID).MainChannel)
+		return "Main channel set!"
+	}
 
 	//Empty message
 	if lowered == "" {
@@ -174,7 +186,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 	// calendar
 	if strings.HasPrefix(lowered, "lizdate") {
 		if len(lowered) == 7 {
-			currentYear, currentMonth, currentDay := time.Now().Date()
+			currentYear, currentMonth, currentDay := time.Now().Local().Date()
 			lizMonth, lizDay := ltime.GetDayMonth(currentYear, currentMonth.String(), currentDay)
 			fmt.Println("Current date:", lizMonth, lizDay, ltime.GetDayOfWeek(lizDay, lizMonth))
 			response := "Current date: " + strconv.Itoa(lizDay) + " " + lizMonth + ", " + ltime.GetDayOfWeek(lizDay, lizMonth)
@@ -294,29 +306,26 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 				return wrongSyntaxMessage + "this one"
 			}
 
-			alarmName = lowered[fifthSpaceIndex+2 : secondQuotationMark]
-			alarmComment = lowered[secondQuotationMark+1:]
+			alarmName = userInput[fifthSpaceIndex+2 : secondQuotationMark]
+			alarmComment = userInput[secondQuotationMark+1:]
 			dline = userInput[14:fifthSpaceIndex]
 
 			/*if firstSpaceIndex == 0 || secondSpaceIndex == 0 || thirdSpaceIndex == 0 {
 				return wrongSyntaxMessage
 			}*/
 
-			t, err := time.Parse("01 02 2006 03:04PM -0700", dline)
-			if err != nil {
-				return (err.Error())
-			}
-
 			alm := &alarm.Alarm{
 				ChannelID: m.ChannelID,
-				Deadline:  t,
+				Deadline:  dline,
 				Content:   alarmComment,
 				Name:      alarmName,
+				UserID:    m.Author.ID,
+				ServerID:  m.GuildID,
 			}
 
 			s.ChannelMessageSend(m.ChannelID, alarmName+" set for "+dline)
-			UserManager.GetUser(m.Author.ID).AlarmManager.SetAlarm(alm)
-			return alarmName + " went off!"
+			UserManager.GetUser(m.Author.ID, s, ServerManager).AlarmManager.SetAlarm(alm, s, m.ChannelID)
+			return "No response"
 		} else {
 			return wrongSyntaxMessage
 		}
@@ -325,40 +334,194 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 	fmt.Println("response got")
 	return ""
 }
+func SaveServers() {
+	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer db.Close()
+	for serverid, server := range ServerManager.Servers {
+		if server.MainChannel == "" {
+			continue
+		}
+		_, err = db.Exec("insert into servers (serverid, mainchannel) values(?, ?)", serverid, server.MainChannel)
+		if err != nil {
+			fmt.Println(err)
+		}
+	}
+}
 
 func SaveAlarms() {
-	emptiedTime, err := time.Parse("01 02 2006 03:04PM -0700", "01 02 2006 03:04PM -0700")
+	emptiedTime := "01 02 2006 03:04PM -0700"
+	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
 	if err != nil {
 		fmt.Println(err)
 	}
-	db, err := sql.Open("sqlite3", "./lizbot.db")
-	if err != nil {
-		fmt.Println(err)
-	}
+	defer db.Close()
 	for _, user := range UserManager.GetAllUsers() {
-		for i, thisAlarm := range user.AlarmManager.GetAlarms() {
+		for _, thisAlarm := range user.AlarmManager.GetAlarms() {
 			if thisAlarm.Deadline == emptiedTime {
-				user.AlarmManager.Alarms = append(user.AlarmManager.Alarms[:i], user.AlarmManager.Alarms[i+1:]...)
+				continue
 			} else {
-				_, err = db.Exec("insert into alarms(name, time, comment, channelid, userid) values('" + thisAlarm.Name + "', '" + thisAlarm.Deadline.String() + "', '" + thisAlarm.Content + "', '" + thisAlarm.ChannelID + "', '" + user.UserID + "')")
+				_, err = db.Exec("insert into alarms (name, time, comment, channelid, userid, serverid) values(?, ?, ?, ?, ?, ?)",
+					thisAlarm.Name,
+					thisAlarm.Deadline,
+					thisAlarm.Content,
+					thisAlarm.ChannelID,
+					thisAlarm.UserID,
+					thisAlarm.ServerID,
+				)
 				if err != nil {
 					fmt.Println(err)
 				}
 			}
 		}
 	}
-	db.Close()
+}
+
+func LoadServers() {
+	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer db.Close()
+	rows, err := db.Query("select * from servers")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var serverid string
+		var channelid string
+		err = rows.Scan(&serverid, &channelid)
+		if err != nil {
+			fmt.Println(err)
+		}
+		ServerManager.Servers[serverid] = &chanselect.Server{
+			MainChannel: channelid,
+		}
+	}
+}
+
+/*func LoadExpiredAlarms() {
+	db, err := sqlx.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer db.Close()
+	rows, err := db.Query("select * from alarms")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer rows.Close()
+	tx, err := db.Begin()
+	for rows.Next() {
+		var newalarm alarm.Alarm
+		var dbid int
+
+		if erra := rows.Scan(&dbid, &newalarm.Name, &newalarm.Deadline, &newalarm.Content, &newalarm.ChannelID, &newalarm.UserID, &newalarm.ServerID); err != nil {
+			fmt.Println(erra, dbid)
+		}
+		deadlineTime, errd := time.Parse("01 02 2006 03:04PM -0700", newalarm.Deadline)
+		if errd != nil {
+			fmt.Println(errd)
+		}
+		if time.Until(deadlineTime) <= 0 {
+			ServerManager.GetServer(newalarm.ServerID).ExpiredAlarmManager.Alarms = append(ServerManager.Servers[newalarm.ServerID].ExpiredAlarmManager.Alarms, newalarm)
+
+			_, err = tx.Exec("DELETE FROM alarms WHERE name=$1 AND time=$2", newalarm.Name, newalarm.Deadline)
+		}
+	}
+	if err != nil {
+		fmt.Println(err)
+		tx.Rollback()
+	} else {
+		tx.Commit()
+	}
+	_, err = db.Exec("delete from servers")
+	if err != nil {
+		fmt.Println(err)
+	}
+}*/
+
+func SendExpiredAlarms() {
+	for _, server := range ServerManager.Servers {
+		if server.MainChannel == "" {
+			continue
+		}
+		var newMessage string
+		for _, alarm := range server.ExpiredAlarmManager.Alarms {
+			newMessage = newMessage + "<@" + alarm.UserID + "> " + alarm.Name + " has gone off!\n"
+		}
+		s.ChannelMessageSend(server.MainChannel, newMessage)
+	}
+}
+
+func LoadAlarms() {
+	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer db.Close()
+	rows, err := db.Query("select * from alarms")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var newalarm alarm.Alarm
+		var dbid int
+		if err = rows.Scan(&dbid, &newalarm.Name, &newalarm.Deadline, &newalarm.Content, &newalarm.ChannelID, &newalarm.UserID, &newalarm.ServerID); err != nil {
+			fmt.Println(err)
+		}
+		_ = UserManager.GetUser(newalarm.UserID, s, ServerManager)
+	}
+}
+
+func DeleteServers() {
+	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer db.Close()
+	_, err = db.Exec("delete from servers")
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+func DeleteExpiredAlarms() {
+	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
+	if err != nil {
+		fmt.Println(err)
+	}
+	defer db.Close()
+	for _, v := range ServerManager.Servers {
+		for _, alarm := range v.ExpiredAlarmManager.Alarms {
+			_, err = db.Exec("DELETE FROM alarms WHERE name=? AND time=?", alarm.Name, alarm.Deadline)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+		}
+	}
 }
 
 var s *discordgo.Session
 
 func main() {
-	db, err := sql.Open("sqlite3", "./lizbot.db")
+	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	sqlstatement := "create table alarms (id integer not null primary key, name text, time text, comment text, channelid text, userid text)"
+	sqlstatement := "create table if not exists servers (serverid text not null primary key, mainchannel text)"
+	_, err = db.Exec(sqlstatement)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	sqlstatement = "create table if not exists alarms (id integer not null primary key, name text, time text, comment text, channelid text, userid text, serverid text)"
 	_, err = db.Exec(sqlstatement)
 	if err != nil {
 		fmt.Println(err)
@@ -375,7 +538,7 @@ func main() {
 	s.AddHandler(messageCreate)
 
 	// In this example, we only care about receiving message events.
-	s.Identify.Intents = discordgo.IntentsGuildMessages
+	s.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages
 
 	// Open a websocket connection to Discord and begin listening.
 	err = s.Open()
@@ -383,12 +546,21 @@ func main() {
 		fmt.Println("error opening connection,", err)
 		return
 	}
+
+	LoadServers()
+	DeleteServers()
+	//LoadExpiredAlarms()
+	LoadAlarms()
+	SendExpiredAlarms()
+	DeleteExpiredAlarms()
+
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 
 	SaveAlarms()
+	SaveServers()
 	// Cleanly close down the Discord session.
 	s.Close()
 	//END
