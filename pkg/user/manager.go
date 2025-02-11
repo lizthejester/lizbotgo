@@ -93,9 +93,9 @@ func (m *UserManager) InitAlarms(userid string, session *discordgo.Session, sm *
 		alarms = append(alarms, newalarm)
 	}
 	newAlarmManager := &alarm.AlarmManager{
-		Alarms: alarms,
+		Alarms: []alarm.Alarm{},
 	}
-	for i, v := range newAlarmManager.Alarms {
+	for _, v := range alarms {
 		deadline, err := time.Parse("01 02 2006 03:04PM -0700", v.Deadline)
 		if err != nil {
 			fmt.Println(err)
@@ -105,7 +105,6 @@ func (m *UserManager) InitAlarms(userid string, session *discordgo.Session, sm *
 			if err != nil {
 				fmt.Println(err)
 			}
-			newAlarmManager.Alarms[i].Deadline = "01 02 2006 03:04PM -0700"
 		} else {
 			go newAlarmManager.SetAlarm(&v, session, v.ChannelID)
 		}

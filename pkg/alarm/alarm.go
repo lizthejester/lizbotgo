@@ -36,9 +36,9 @@ func (m *AlarmManager) SetAlarm(alarm *Alarm, session *discordgo.Session, channe
 	timer1 := time.NewTimer(time.Until(deadlineTime))
 	<-timer1.C
 	fmt.Println("timer fired")
+	if m.Alarms[alarmIndex].Deadline == "01 02 2006 03:04PM -0700" {
+		return
+	}
 	session.ChannelMessageSend(channelid, alarm.Name+" went off!")
 	m.Alarms[alarmIndex].Deadline = "01 02 2006 03:04PM -0700"
-	if err != nil {
-		fmt.Println(err)
-	}
 }

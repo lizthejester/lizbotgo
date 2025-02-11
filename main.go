@@ -74,18 +74,18 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 		return "Main channel set!"
 	}
 
-	//Empty message
+	// in case of empty message
 	if lowered == "" {
 		return "well you're awfully silent..."
 	}
 
-	//command list
+	// command list
 	if lowered == "command list" {
 		directory := "?magic8ball\n?flip a coin\n?roll a d4, d6, d8, d10, d12, or d20\n?inspire\n?joke\n?lizdate"
 		return directory
 	}
 
-	//chat
+	// chat
 	switch lowered {
 	case "hello", "hi", "hihi", "howdy", "hiya", "hey", "greetings", "yo", "salutations":
 		greetings := []string{"Hello there", "Hi", "Greetings", "Hihi", "Howdy", "Yo", "Salutations"}
@@ -303,13 +303,16 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 					}
 				}
 			} else {
-				return wrongSyntaxMessage + "this one"
+				return wrongSyntaxMessage
 			}
 
 			alarmName = userInput[fifthSpaceIndex+2 : secondQuotationMark]
 			alarmComment = userInput[secondQuotationMark+1:]
 			dline = userInput[14:fifthSpaceIndex]
 
+			if len(alarmComment) > 164 || len(alarmName) > 50 {
+				return "Name or comment too long, max 50 for name & 164 for comment"
+			}
 			/*if firstSpaceIndex == 0 || secondSpaceIndex == 0 || thirdSpaceIndex == 0 {
 				return wrongSyntaxMessage
 			}*/
@@ -331,8 +334,56 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 		}
 	}
 
+	if lowered == "list my alarms" {
+		ListAlarms(m.Author.ID, m.ChannelID)
+		return "Alarms listed!"
+	}
+
+	if strings.HasPrefix(lowered, "delete alarm") {
+		index, err := strconv.Atoi(lowered[13:])
+		if err != nil {
+			fmt.Println(err)
+		}
+		DeleteAlarm(m.Author.ID, m.ChannelID, index)
+		return "Deleted."
+	}
+
 	fmt.Println("response got")
 	return ""
+}
+
+func DeleteAlarm(userid string, channnelid string, i int) {
+	UserManager.GetUser(userid, s, ServerManager).AlarmManager.Alarms[i-1].Deadline = "01 02 2006 03:04PM -0700"
+}
+
+func ListAlarms(userid string, channelid string) {
+	alarmlist := []string{}
+	for i, v := range UserManager.GetUser(userid, s, ServerManager).AlarmManager.Alarms {
+		if v.Deadline == "01 02 2006 03:04PM -0700" {
+			continue
+		}
+		alarmlist = append(alarmlist, "- "+"Alarm "+strconv.Itoa(i+1)+": "+v.Name+" "+v.Deadline+" "+v.Content+"\n")
+	}
+	var splitMessage func(aList []string)
+
+	splitMessage = func(aList []string) {
+		if len(aList) > 8 {
+			var divMessage string
+			for _, v := range aList[:8] {
+				divMessage = divMessage + v
+			}
+			s.ChannelMessageSend(channelid, divMessage)
+			splitMessage(aList[8:])
+		} else {
+			var divMessage string
+			for _, v := range aList {
+				divMessage = divMessage + v
+			}
+			s.ChannelMessageSend(channelid, divMessage)
+		}
+	}
+
+	splitMessage(alarmlist)
 }
 func SaveServers() {
 	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
@@ -449,11 +500,30 @@ func SendExpiredAlarms() {
 		if server.MainChannel == "" {
 			continue
 		}
-		var newMessage string
+		alarmList := []string{}
 		for _, alarm := range server.ExpiredAlarmManager.Alarms {
-			newMessage = newMessage + "<@" + alarm.UserID + "> " + alarm.Name + " has gone off!\n"
+			alarmList = append(alarmList, "<@"+alarm.UserID+"> "+alarm.Name+" has gone off!\n")
 		}
-		s.ChannelMessageSend(server.MainChannel, newMessage)
+		var splitMessage func(aList []string)
+
+		splitMessage = func(aList []string) {
+			if len(aList) > 8 {
+				var divMessage string
+				for _, v := range aList[:8] {
+					divMessage = divMessage + v
+				}
+				s.ChannelMessageSend(server.MainChannel, divMessage)
+				splitMessage(aList[8:])
+			} else {
+				var divMessage string
+				for _, v := range aList {
+					divMessage = divMessage + v
+				}
+				s.ChannelMessageSend(server.MainChannel, divMessage)
+			}
+		}
+
+		splitMessage(alarmList)
 	}
 }
 
@@ -507,20 +577,34 @@ func DeleteExpiredAlarms() {
 	}
 }
 
-var s *discordgo.Session
-
-func main() {
+func DeleteAlarms() {
 	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
 	if err != nil {
 		fmt.Println(err)
 	}
+	defer db.Close()
 
+	_, err = db.Exec("delete from alarms")
+	if err != nil {
+		fmt.Println(err)
+	}
+}
+
+var s *discordgo.Session
+
+func main() {
+	// open database
+	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
+	if err != nil {
+		fmt.Println(err)
+	}
+	// create table "servers" if it doesnt exist
 	sqlstatement := "create table if not exists servers (serverid text not null primary key, mainchannel text)"
 	_, err = db.Exec(sqlstatement)
 	if err != nil {
 		fmt.Println(err)
 	}
-
+	// create table "alarms" if it doesnt exist
 	sqlstatement = "create table if not exists alarms (id integer not null primary key, name text, time text, comment text, channelid text, userid text, serverid text)"
 	_, err = db.Exec(sqlstatement)
 	if err != nil {
@@ -528,11 +612,13 @@ func main() {
 	}
 	db.Close()
 
+	// create session
 	s, err = discordgo.New("Bot " + config.DISCORD_KEY)
 	if err != nil {
 		fmt.Printf("Invalid bot parameters: %v", err)
 		return
 	}
+
 	//BORROWED CODE
 	// Register the messageCreate func as a callback for MessageCreate events.
 	s.AddHandler(messageCreate)
@@ -553,6 +639,7 @@ func main() {
 	LoadAlarms()
 	SendExpiredAlarms()
 	DeleteExpiredAlarms()
+	DeleteAlarms()
 
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
