@@ -31,29 +31,29 @@ type Lizbot struct {
 var UserManager *user.UserManager = user.NewManager()
 var ServerManager *chanselect.ServerManager = chanselect.NewServerManager()
 
-// This function will be called (due to AddHandler above) every time a new
-// message is created on any channel that the authenticated bot has access to.
+// This function will be called (due to AddHandler above) every time a newmessage is created on any channel that the authenticated bot has access to.
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	userMessage := m.Content
+	// handles empty messages
 	if userMessage == "" {
 		return
 	}
-	// dont respond to self
+	// doesnt respond to self
 	if m.Author.ID == s.State.User.ID {
 		return
-		// dont respond to pk
 	}
+	// doesnt respond to pluralkit ((I'm not totally sure this actually works))
 	if m.Author.ID == "1115685378704277585" {
 		return
-		// only respond to "?" proxy
 	}
+	// only responds to "?" proxy
 	if string(userMessage[0]) != "?" {
 		return
 	}
+	//removes ? from user input once read
 	userMessage = userMessage[1:]
-	fmt.Println(userMessage)
-	fmt.Println("getting response")
 	response := getResponse(s, m, userMessage)
+	// handles unknown commands
 	if response == "" {
 		s.ChannelMessageSend(m.ChannelID, "sorry, I don't know that command! :)")
 	} else if response == "No response" {
@@ -63,28 +63,23 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
+// get response contains all the user input commands
 func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput string) string {
 	user := UserManager.GetUser(m.Author.ID, s, ServerManager)
 	lowered := strings.ToLower(userInput)
 	fmt.Println(lowered)
-
+	// COMMAND LIST
+	//set main channel
 	if lowered == "set main channel" {
 		ServerManager.GetServer(m.GuildID).SetChannel(m.ChannelID)
 		fmt.Println(ServerManager.GetServer(m.GuildID).MainChannel)
 		return "Main channel set!"
 	}
-
-	// in case of empty message
-	if lowered == "" {
-		return "well you're awfully silent..."
-	}
-
 	// command list
 	if lowered == "command list" {
 		directory := "?magic8ball\n?flip a coin\n?roll a d4, d6, d8, d10, d12, or d20\n?inspire\n?joke\n?lizdate"
 		return directory
 	}
-
 	// chat
 	switch lowered {
 	case "hello", "hi", "hihi", "howdy", "hiya", "hey", "greetings", "yo", "salutations":
@@ -128,7 +123,6 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			"What animal is always at a baseball game? A bat."}
 		return jokes[rand.Intn(len(jokes))]
 	}
-
 	// rolling
 	if strings.HasPrefix(lowered, "roll a d") {
 		return roll.RollDice(lowered[8:])
@@ -154,7 +148,6 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 	if lowered == "inspire" {
 		return inspire.GetQuote()
 	}
-
 	// tarot
 	switch lowered {
 	case "shuffle":
@@ -172,8 +165,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 
 		return "Deck reset."
 	}
-
-	//Miss Amie suggests
+	// Miss Amie suggests
 	/*sc := bufio.NewScanner(strings.NewReader(userInput))
 	sc.Split(bufio.ScanWords)
 	sc.Scan()
@@ -182,7 +174,6 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 	fmt.Println(sc.Text())
 	sc.Scan()
 	fmt.Println(sc.Text())*/
-
 	// calendar
 	if strings.HasPrefix(lowered, "lizdate") {
 		if len(lowered) == 7 {
@@ -236,12 +227,11 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 		response := strconv.Itoa(lizDay) + " " + lizMonth + ", " + ltime.GetDayOfWeek(lizDay, lizMonth)
 		return response
 	}
-
-	//example command: "set alarm for (day) (month) (year) (time + timezone) (name) (comment string)"
 	if strings.HasPrefix(lowered, "set alarm for") {
-		//TODO: Parse Deadline
+		//example command: "set alarm for (month) (day) (year) ((time)AM/PM) (timezone) (name) (comment string)"
+		//note: use of military time does not require colon in time, declaration of AM/PM, but does require timezones.
 		wrongSyntaxMessage := "Syntax is: month day year 03:04PM timezone \"Name\" Description \n Example: April 20th 2024 04:20pm PST \"smokin'\" That Jazz Cabbage \n Example: 04 20 24 0420 -0800 \"smokin\" that jazz cabbage"
-
+		// indexes for parsing user input
 		if len(lowered) > 14 {
 			firstSpaceIndex := 0
 			secondSpaceIndex := 0
@@ -313,7 +303,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			} else {
 				return "Missing quotation mark. " + wrongSyntaxMessage
 			}
-			//parse user input
+			// parse user input. switches allow for dynamic input and some typos.
 			alarmName := userInput[fifthSpaceIndex+2 : secondQuotationMark]
 			alarmComment := userInput[secondQuotationMark+1:]
 			dlMonth := lowered[14:firstSpaceIndex]
@@ -422,7 +412,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			if len(dlYear) < 2 {
 				return "Year too short. " + wrongSyntaxMessage
 			}
-
+			// military time conversion
 			hasColon := true
 			if colonIndex == 0 {
 				hasColon = false
@@ -445,7 +435,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			if dlm == "pm" {
 				isPM = true
 			}
-			// time conversions
+			// PM time conversions
 			if isPM {
 				switch dlTimeHours {
 				case "12":
@@ -487,6 +477,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 				default:
 					return "Problem with time. " + wrongSyntaxMessage
 				}
+				// AM time conversion
 			} else if !isPM && hasColon {
 				switch dlTimeHours {
 				case "12":
@@ -528,6 +519,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 				default:
 					return "Problem with time. " + wrongSyntaxMessage
 				}
+				// military time conversion
 			} else if !isPM && !hasColon {
 				switch dlTimeHours {
 				case "01":
@@ -1059,12 +1051,15 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 				UserID:    m.Author.ID,
 				ServerID:  m.GuildID,
 			}
+			// parse deadline
 			parsedTime, err := time.Parse("01 02 2006 03:04PM -0700", dline)
 			if err != nil {
 				fmt.Println(err)
 			}
+			//convert deadline to unix
 			unixTime := parsedTime.Unix()
 
+			// sends message with unix time formatted for discord when alarm is set
 			s.ChannelMessageSend(m.ChannelID, alarmName+" set for "+"<t:"+strconv.FormatInt(unixTime, 10)+":F>")
 			UserManager.GetUser(m.Author.ID, s, ServerManager).AlarmManager.SetAlarm(alm, s, m.ChannelID)
 			return "No response"
@@ -1072,12 +1067,10 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			return wrongSyntaxMessage
 		}
 	}
-
 	if lowered == "list my alarms" {
 		ListAlarms(m.Author.ID, m.ChannelID)
 		return "Alarms listed!"
 	}
-
 	if strings.HasPrefix(lowered, "delete alarm") {
 		index, err := strconv.Atoi(lowered[13:])
 		if err != nil {
@@ -1086,15 +1079,19 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 		DeleteAlarm(m.Author.ID, m.ChannelID, index)
 		return "Deleted."
 	}
-
+	// in case of empty message
+	if lowered == "" {
+		return "well you're awfully silent..."
+	}
+	// if no commands recognized then return empty string (triggers "I dont know that command" message)
 	fmt.Println("response got")
 	return ""
+
 }
 
 func DeleteAlarm(userid string, channnelid string, i int) {
 	UserManager.GetUser(userid, s, ServerManager).AlarmManager.Alarms[i-1].Deadline = "01 02 2006 03:04PM -0700"
 }
-
 func ListAlarms(userid string, channelid string) {
 	alarmlist := []string{}
 	for i, v := range UserManager.GetUser(userid, s, ServerManager).AlarmManager.Alarms {
@@ -1108,8 +1105,8 @@ func ListAlarms(userid string, channelid string) {
 		unixTime := parsedTime.Unix()
 		alarmlist = append(alarmlist, "- "+"Alarm "+strconv.Itoa(i+1)+": "+v.Name+" <t:"+strconv.FormatInt(unixTime, 10)+":F> "+v.Content+"\n")
 	}
+	// splits message in to 8 alarms per message
 	var splitMessage func(aList []string)
-
 	splitMessage = func(aList []string) {
 		if len(aList) > 8 {
 			var divMessage string
@@ -1145,7 +1142,6 @@ func SaveServers() {
 		}
 	}
 }
-
 func SaveAlarms() {
 	emptiedTime := "01 02 2006 03:04PM -0700"
 	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
@@ -1173,7 +1169,6 @@ func SaveAlarms() {
 		}
 	}
 }
-
 func LoadServers() {
 	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
 	if err != nil {
@@ -1197,48 +1192,6 @@ func LoadServers() {
 		}
 	}
 }
-
-/*func LoadExpiredAlarms() {
-	db, err := sqlx.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer db.Close()
-	rows, err := db.Query("select * from alarms")
-	if err != nil {
-		fmt.Println(err)
-	}
-	defer rows.Close()
-	tx, err := db.Begin()
-	for rows.Next() {
-		var newalarm alarm.Alarm
-		var dbid int
-
-		if erra := rows.Scan(&dbid, &newalarm.Name, &newalarm.Deadline, &newalarm.Content, &newalarm.ChannelID, &newalarm.UserID, &newalarm.ServerID); err != nil {
-			fmt.Println(erra, dbid)
-		}
-		deadlineTime, errd := time.Parse("01 02 2006 03:04PM -0700", newalarm.Deadline)
-		if errd != nil {
-			fmt.Println(errd)
-		}
-		if time.Until(deadlineTime) <= 0 {
-			ServerManager.GetServer(newalarm.ServerID).ExpiredAlarmManager.Alarms = append(ServerManager.Servers[newalarm.ServerID].ExpiredAlarmManager.Alarms, newalarm)
-
-			_, err = tx.Exec("DELETE FROM alarms WHERE name=$1 AND time=$2", newalarm.Name, newalarm.Deadline)
-		}
-	}
-	if err != nil {
-		fmt.Println(err)
-		tx.Rollback()
-	} else {
-		tx.Commit()
-	}
-	_, err = db.Exec("delete from servers")
-	if err != nil {
-		fmt.Println(err)
-	}
-}*/
-
 func SendExpiredAlarms() {
 	for _, server := range ServerManager.Servers {
 		if server.MainChannel == "" {
@@ -1270,7 +1223,6 @@ func SendExpiredAlarms() {
 		splitMessage(alarmList)
 	}
 }
-
 func LoadAlarms() {
 	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
 	if err != nil {
@@ -1291,7 +1243,6 @@ func LoadAlarms() {
 		_ = UserManager.GetUser(newalarm.UserID, s, ServerManager)
 	}
 }
-
 func DeleteServers() {
 	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
 	if err != nil {
@@ -1303,7 +1254,6 @@ func DeleteServers() {
 		fmt.Println(err)
 	}
 }
-
 func DeleteExpiredAlarms() {
 	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
 	if err != nil {
@@ -1320,7 +1270,6 @@ func DeleteExpiredAlarms() {
 		}
 	}
 }
-
 func DeleteAlarms() {
 	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
 	if err != nil {
@@ -1379,12 +1328,12 @@ func main() {
 
 	LoadServers()
 	DeleteServers()
-	//LoadExpiredAlarms()
 	LoadAlarms()
 	SendExpiredAlarms()
 	DeleteExpiredAlarms()
 	DeleteAlarms()
 
+	// borrowed code
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
