@@ -48,7 +48,6 @@ func (m *UserManager) GetUser(id string, s *discordgo.Session, sm *chanselect.Se
 	return newUser
 }
 
-// name, time, comment, channelid, userid
 func (m *UserManager) InitAlarms(userid string, session *discordgo.Session, sm *chanselect.ServerManager) *alarm.AlarmManager {
 	//var alarms []alarm.Alarm
 	alarms := []alarm.Alarm{}

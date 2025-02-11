@@ -18,7 +18,6 @@ type ServerManager struct {
 func NewServerManager() *ServerManager {
 	newServerManager := &ServerManager{
 		Servers: make(map[string]*Server),
-		/* mapname = make(map[keytype]valuetype) */
 	}
 	return newServerManager
 }
@@ -34,7 +33,6 @@ func (m *ServerManager) GetServer(GuildID string) *Server {
 	newServer := &Server{
 		MainChannel: "",
 	}
-	//m.Servers = append(m.Servers, *newServer)
 	m.Servers[GuildID] = newServer
 	return newServer
 }

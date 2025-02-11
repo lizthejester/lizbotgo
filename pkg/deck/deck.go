@@ -12,7 +12,6 @@ type DeckManager struct {
 	Deck []string
 }
 
-// Initialize deck
 func InitDeck() *DeckManager {
 	var newDeck DeckManager
 	newDeck.Hand = []string{}
@@ -103,7 +102,6 @@ func InitDeck() *DeckManager {
 
 	return &newDeck
 }
-
 func (m *DeckManager) TarotShuffle() {
 	rand.Seed(uint64(time.Now().UnixNano()))
 	for i := len(m.Deck) - 1; i > 0; i-- {
@@ -111,7 +109,6 @@ func (m *DeckManager) TarotShuffle() {
 		m.Deck[i], m.Deck[j] = m.Deck[j], m.Deck[i]
 	}
 }
-
 func (m *DeckManager) Draw() string {
 	var inversion string
 	if rand.Intn(2) == 1 {
@@ -125,7 +122,6 @@ func (m *DeckManager) Draw() string {
 
 	return m.Hand[len(m.Hand)-1] + inversion
 }
-
 func (m *DeckManager) ResetDeck() {
 	m.Deck = append(m.Hand, m.Deck...)
 	m.Hand = []string{}
