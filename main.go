@@ -240,7 +240,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 	//example command: "set alarm for (day) (month) (year) (time + timezone) (name) (comment string)"
 	if strings.HasPrefix(lowered, "set alarm for") {
 		//TODO: Parse Deadline
-		wrongSyntaxMessage := "Syntax is: 01 30 2006 03:04PM -0800 \"Name\" Description"
+		wrongSyntaxMessage := "Syntax is: month day year 03:04PM timezone \"Name\" Description \n Example: April 20th 2024 04:20pm PST \"smokin'\" That Jazz Cabbage \n Example: 04 20 24 0420 -0800 \"smokin\" that jazz cabbage"
 
 		if len(lowered) > 14 {
 			firstSpaceIndex := 0
@@ -248,15 +248,13 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			thirdSpaceIndex := 0
 			fourthSpaceIndex := 0
 			fifthSpaceIndex := 0
-			var alarmName string
-			var alarmComment string
-			var dline string
+
 			for i := 15; firstSpaceIndex == 0; i++ {
 				if string(lowered[i]) == " " {
 					firstSpaceIndex = i
 				}
 				if i == len(lowered) {
-					return wrongSyntaxMessage
+					return "Not enough spaces. " + wrongSyntaxMessage
 				}
 			}
 			for i := firstSpaceIndex + 1; secondSpaceIndex == 0; i++ {
@@ -264,7 +262,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 					secondSpaceIndex = i
 				}
 				if i == len(lowered) {
-					return wrongSyntaxMessage
+					return "Not enough spaces. " + wrongSyntaxMessage
 				}
 			}
 			for i := secondSpaceIndex + 1; thirdSpaceIndex == 0; i++ {
@@ -272,7 +270,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 					thirdSpaceIndex = i
 				}
 				if i == len(lowered) {
-					return wrongSyntaxMessage
+					return "Not enough spaces. " + wrongSyntaxMessage
 				}
 			}
 			for i := thirdSpaceIndex + 1; fourthSpaceIndex == 0; i++ {
@@ -280,7 +278,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 					fourthSpaceIndex = i
 				}
 				if i == len(lowered) {
-					return wrongSyntaxMessage
+					return "Not enough spaces. " + wrongSyntaxMessage
 				}
 			}
 			for i := fourthSpaceIndex + 1; fifthSpaceIndex == 0; i++ {
@@ -288,10 +286,20 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 					fifthSpaceIndex = i
 				}
 				if i == len(lowered) {
-					return wrongSyntaxMessage
+					return "Not enough spaces. " + wrongSyntaxMessage
 				}
 			}
-
+			// set colon index
+			colonIndex := 0
+			for i := thirdSpaceIndex + 1; colonIndex == 0; i++ {
+				if string(lowered[i]) == ":" {
+					colonIndex = i
+				}
+				if i == len(lowered) {
+					break
+				}
+			}
+			// set index of closing quotation mark
 			secondQuotationMark := 0
 			if string(lowered[fifthSpaceIndex+1]) == "\"" {
 				for i := fifthSpaceIndex + 2; secondQuotationMark == 0; i++ {
@@ -299,23 +307,749 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 						secondQuotationMark = i
 					}
 					if i == len(lowered) {
-						return wrongSyntaxMessage
+						return "Missing quotation mark. " + wrongSyntaxMessage
 					}
 				}
 			} else {
-				return wrongSyntaxMessage
+				return "Missing quotation mark. " + wrongSyntaxMessage
+			}
+			//parse user input
+			alarmName := userInput[fifthSpaceIndex+2 : secondQuotationMark]
+			alarmComment := userInput[secondQuotationMark+1:]
+			dlMonth := lowered[14:firstSpaceIndex]
+			switch dlMonth {
+			case "january", "jan", "1", "01":
+				dlMonth = "01"
+			case "february", "feb", "2", "02":
+				dlMonth = "02"
+			case "march", "mar", "3", "03":
+				dlMonth = "03"
+			case "april", "apr", "4", "04":
+				dlMonth = "04"
+			case "may", "5", "05":
+				dlMonth = "05"
+			case "june", "jun", "6", "06":
+				dlMonth = "06"
+			case "july", "jul", "7", "07":
+				dlMonth = "07"
+			case "august", "aug", "8", "08":
+				dlMonth = "08"
+			case "september", "sep", "9", "09":
+				dlMonth = "09"
+			case "october", "oct", "10":
+				dlMonth = "10"
+			case "november", "nov", "11":
+				dlMonth = "11"
+			case "december", "dec", "12":
+				dlMonth = "12"
+			default:
+				return "Problem with month. " + wrongSyntaxMessage
+			}
+			dlDay := lowered[firstSpaceIndex+1 : secondSpaceIndex]
+			switch dlDay {
+			case "01", "1", "first", "1st":
+				dlDay = "01"
+			case "02", "2", "second", "2nd":
+				dlDay = "02"
+			case "03", "3", "third", "3rd":
+				dlDay = "03"
+			case "04", "4", "fourth", "4th":
+				dlDay = "04"
+			case "05", "5", "fifth", "5th":
+				dlDay = "05"
+			case "06", "6", "sixth", "6th":
+				dlDay = "06"
+			case "07", "7", "seventh", "7th":
+				dlDay = "07"
+			case "08", "8", "eighth", "8th":
+				dlDay = "08"
+			case "09", "9", "ninth", "9th":
+				dlDay = "09"
+			case "10", "tenth", "10th":
+				dlDay = "10"
+			case "11", "eleventh", "11th":
+				dlDay = "11"
+			case "12", "twelfth", "twelveth", "twelvth", "12th":
+				dlDay = "12"
+			case "13", "thirteenth", "13th":
+				dlDay = "13"
+			case "14", "fourteenth", "14th":
+				dlDay = "14"
+			case "15", "fifteenth", "15th":
+				dlDay = "15"
+			case "16", "sixteenth", "16th":
+				dlDay = "16"
+			case "17", "seventeenth", "17th":
+				dlDay = "17"
+			case "18", "eighteenth", "18th":
+				dlDay = "18"
+			case "19", "ninteenth", "nineteenth", "19th":
+				dlDay = "19"
+			case "20", "twentyth", "twentyeth", "20th":
+				dlDay = "20"
+			case "21", "twentyfirst", "21st":
+				dlDay = "21"
+			case "22", "twentysecond", "22nd":
+				dlDay = "22"
+			case "23", "twentythird", "23rd":
+				dlDay = "23"
+			case "24", "twentyfourth", "24th":
+				dlDay = "24"
+			case "25", "twentyfifth", "25th":
+				dlDay = "25"
+			case "26", "twentysixth", "26th":
+				dlDay = "26"
+			case "27", "twentyseventh", "27th":
+				dlDay = "27"
+			case "28", "twentyeighth", "28th":
+				dlDay = "28"
+			case "29", "twentyninth", "twentynineth", "29th":
+				dlDay = "29"
+			case "30", "thirtyth", "thirtyeth", "thirtieth", "30th":
+				dlDay = "30"
+			case "31", "thirtyfirst", "31st":
+				dlDay = "31"
+			default:
+				return "Problem with day. " + wrongSyntaxMessage
+			}
+			dlYear := lowered[secondSpaceIndex+1 : thirdSpaceIndex]
+			if len(dlYear) == 2 {
+				dlYear = "20" + dlYear
+			}
+			if len(dlYear) > 4 {
+				return "Year too long. " + wrongSyntaxMessage
+			}
+			if len(dlYear) < 2 {
+				return "Year too short. " + wrongSyntaxMessage
 			}
 
-			alarmName = userInput[fifthSpaceIndex+2 : secondQuotationMark]
-			alarmComment = userInput[secondQuotationMark+1:]
-			dline = userInput[14:fifthSpaceIndex]
-
+			hasColon := true
+			if colonIndex == 0 {
+				hasColon = false
+			}
+			var dlTimeHours string
+			var dlTimeMins string
+			var dlm string
+			var dlTZone string
+			if hasColon {
+				// standard operation
+				dlTimeHours = lowered[thirdSpaceIndex+1 : colonIndex]
+				dlTimeMins = lowered[colonIndex+1 : colonIndex+3]
+				dlm = lowered[fourthSpaceIndex-2 : fourthSpaceIndex]
+			} else {
+				// military time conversion
+				dlTimeHours = lowered[thirdSpaceIndex+1 : thirdSpaceIndex+3]
+				dlTimeMins = lowered[thirdSpaceIndex+3 : fourthSpaceIndex]
+			}
+			isPM := false
+			if dlm == "pm" {
+				isPM = true
+			}
+			// time conversions
+			if isPM {
+				switch dlTimeHours {
+				case "12":
+					dlTimeHours = "12"
+					dlm = "PM"
+				case "01", "1":
+					dlTimeHours = "01"
+					dlm = "PM"
+				case "02", "2":
+					dlTimeHours = "02"
+					dlm = "PM"
+				case "03", "3":
+					dlTimeHours = "03"
+					dlm = "PM"
+				case "04", "4":
+					dlTimeHours = "04"
+					dlm = "PM"
+				case "05", "5":
+					dlTimeHours = "05"
+					dlm = "PM"
+				case "06", "6":
+					dlTimeHours = "06"
+					dlm = "PM"
+				case "07", "7":
+					dlTimeHours = "07"
+					dlm = "PM"
+				case "08", "8":
+					dlTimeHours = "08"
+					dlm = "PM"
+				case "09", "9":
+					dlTimeHours = "09"
+					dlm = "PM"
+				case "10":
+					dlTimeHours = "10"
+					dlm = "PM"
+				case "11":
+					dlTimeHours = "11"
+					dlm = "PM"
+				default:
+					return "Problem with time. " + wrongSyntaxMessage
+				}
+			} else if !isPM && hasColon {
+				switch dlTimeHours {
+				case "12":
+					dlTimeHours = "12"
+					dlm = "AM"
+				case "01", "1":
+					dlTimeHours = "01"
+					dlm = "AM"
+				case "02", "2":
+					dlTimeHours = "02"
+					dlm = "AM"
+				case "03", "3":
+					dlTimeHours = "03"
+					dlm = "AM"
+				case "04", "4":
+					dlTimeHours = "04"
+					dlm = "AM"
+				case "05", "5":
+					dlTimeHours = "05"
+					dlm = "AM"
+				case "06", "6":
+					dlTimeHours = "06"
+					dlm = "AM"
+				case "07", "7":
+					dlTimeHours = "07"
+					dlm = "AM"
+				case "08", "8":
+					dlTimeHours = "08"
+					dlm = "AM"
+				case "09", "9":
+					dlTimeHours = "09"
+					dlm = "AM"
+				case "10":
+					dlTimeHours = "10"
+					dlm = "AM"
+				case "11":
+					dlTimeHours = "11"
+					dlm = "AM"
+				default:
+					return "Problem with time. " + wrongSyntaxMessage
+				}
+			} else if !isPM && !hasColon {
+				switch dlTimeHours {
+				case "01":
+					dlTimeHours = "01"
+					dlm = "AM"
+				case "02":
+					dlTimeHours = "02"
+					dlm = "AM"
+				case "03":
+					dlTimeHours = "03"
+					dlm = "AM"
+				case "04":
+					dlTimeHours = "04"
+					dlm = "AM"
+				case "05":
+					dlTimeHours = "05"
+					dlm = "AM"
+				case "06":
+					dlTimeHours = "06"
+					dlm = "AM"
+				case "07":
+					dlTimeHours = "07"
+					dlm = "AM"
+				case "08":
+					dlTimeHours = "08"
+					dlm = "AM"
+				case "09":
+					dlTimeHours = "09"
+					dlm = "AM"
+				case "10":
+					dlTimeHours = "10"
+					dlm = "AM"
+				case "11":
+					dlTimeHours = "11"
+					dlm = "AM"
+				case "12":
+					dlTimeHours = "12"
+					dlm = "PM"
+				case "13":
+					dlTimeHours = "01"
+					dlm = "PM"
+				case "14":
+					dlTimeHours = "02"
+					dlm = "PM"
+				case "15":
+					dlTimeHours = "03"
+					dlm = "PM"
+				case "16":
+					dlTimeHours = "04"
+					dlm = "PM"
+				case "17":
+					dlTimeHours = "05"
+					dlm = "PM"
+				case "18":
+					dlTimeHours = "06"
+					dlm = "PM"
+				case "19":
+					dlTimeHours = "07"
+					dlm = "PM"
+				case "20":
+					dlTimeHours = "08"
+					dlm = "PM"
+				case "21":
+					dlTimeHours = "09"
+					dlm = "PM"
+				case "22":
+					dlTimeHours = "10"
+					dlm = "PM"
+				case "23":
+					dlTimeHours = "11"
+					dlm = "PM"
+				case "24":
+					dlTimeHours = "12"
+					dlm = "AM"
+				default:
+					return "Problem with time. " + wrongSyntaxMessage
+				}
+			}
+			// time zone conversions
+			dlTZone = lowered[fourthSpaceIndex+1 : fifthSpaceIndex]
+			switch dlTZone {
+			case "acdt", "+1030":
+				dlTZone = "+1030"
+			case "acst", "+0930":
+				dlTZone = "+0930"
+			case "act", "−0500":
+				dlTZone = "-0500"
+			//case	"ACT"	ASEAN Common Time (proposed)
+			//dlTZone = +0800
+			case "acwst", "+0845": //Australian Central Western Standard Time (unofficial)	UTC+08:45
+				dlTZone = "+0845"
+			case "adt", "-0300": //Atlantic Daylight Time	UTC−03:00
+				dlTZone = "-0300"
+			case "aedt", "+1100": //Australian Eastern Daylight Saving Time	UTC+11:00
+				dlTZone = "+1100"
+			case "aest", "+1000": //Australian Eastern Standard Time	UTC+10:00
+				dlTZone = "+1000"
+			case "aft", "+0430": //Afghanistan Time	UTC+04:30
+				dlTZone = "+0430"
+			case "akdt", "-0800": //Alaska Daylight Time	UTC−08:00
+				dlTZone = "-0800"
+			case "akst", "-0900": //Alaska Standard Time	UTC−09:00
+				dlTZone = "-0900"
+			case "almt", "+0600": //Alma-Ata Time[1]	UTC+06:00
+				dlTZone = "+0600"
+			case "amst": //Amazon Summer Time (Brazil)[2]	UTC−03:00
+				dlTZone = "-0300"
+			case "amt":
+				return "specify \"Amazon\" or \"Armenia\""
+			case "amazon", "-0400": //(Brazil)[3]	UTC−04:00
+				dlTZone = "-0400"
+			case "armenia", "+0400": //UTC+04:00
+				dlTZone = "+0400"
+			case "anat", "+1200": //Anadyr Time[4]	UTC+12:00
+				dlTZone = "+1200"
+			case "aqtt", "+0500": //Aqtobe Time[5]	UTC+05:00
+				dlTZone = "+0500"
+			case "art": //Argentina Time	UTC−03:00
+				dlTZone = "-0300"
+			case "ast":
+				return "please specify \"Arabia-Standard\", or \"Atlantic-Standard\""
+			case "arabia-standard", "+0300": //Arabia Standard Time	UTC+03:00
+				dlTZone = "+0300"
+			case "atlantic-standard": //Atlantic Standard Time	UTC−04:00
+				dlTZone = "-0400"
+			case "awst", "+0800": //Australian Western Standard Time	UTC+08:00
+				dlTZone = "+0800"
+			case "azost", "+0000": //Azores Summer Time	UTC+00:00
+				dlTZone = "+0000"
+			case "azot", "-0100": //Azores Standard Time	UTC−01:00
+				dlTZone = "-0100"
+			case "azt": //Azerbaijan Time	UTC+04:00
+				dlTZone = "0400"
+			case "bnt": //Brunei Time	UTC+08:00
+				dlTZone = "+0800"
+			case "biot": //British Indian Ocean Time	UTC+06:00
+				dlTZone = "+0600"
+			case "bit", "-1200": //Baker Island Time	UTC−12:00
+				dlTZone = "-1200"
+			case "bot": //Bolivia Time	UTC−04:00
+				dlTZone = "-0400"
+			case "brst", "-0200": //Brasília Summer Time	UTC−02:00
+				dlTZone = "-0200"
+			case "brt": //Brasília Time	UTC−03:00
+				dlTZone = "-0300"
+			case "bst":
+				return "specify \"Bangledesh\" or \"Bougainville\""
+			case "bangledesh": //Bangladesh Standard Time	UTC+06:00
+				dlTZone = "+0600"
+			case "bougainville": //Bougainville Standard Time[6]	UTC+11:00
+				dlTZone = "+1100"
+			//case	"BST", "":	//British Summer Time (British Standard Time from Mar 1968 to Oct 1971)	UTC+01:00
+			//dlTZone = ""
+			case "btt": //Bhutan Time	UTC+06:00
+				dlTZone = "+0600"
+			case "cat", "+0200": //Central Africa Time	UTC+02:00
+				dlTZone = "+0200"
+			case "cct", "+0630": //Cocos Islands Time	UTC+06:30
+				dlTZone = "+0630"
+			case "cdt":
+				return "please specify \"Central-Daylight\", or \"Cuba-Daylight\""
+			case "central-daylight", "-0500": //Central Daylight Time (North America)	UTC−05:00
+				dlTZone = "-0500"
+			case "cuba-daylight": //Cuba Daylight Time[7]	UTC−04:00
+				dlTZone = "-0400"
+			case "cest": //Central European Summer Time	UTC+02:00
+				dlTZone = "+0200"
+			case "cet", "+0100": //Central European Time	UTC+01:00
+				dlTZone = "+0100"
+			case "chadt", "+1345": //Chatham Daylight Time	UTC+13:45
+				dlTZone = "+1345"
+			case "chast", "+1245": //Chatham Standard Time	UTC+12:45
+				dlTZone = "+1245"
+			case "chot": //Choibalsan Standard Time	UTC+08:00
+				dlTZone = "+0800"
+			case "chost", "+0900": //Choibalsan Summer Time	UTC+09:00
+				dlTZone = "+0900"
+			case "chst": //Chamorro Standard Time	UTC+10:00
+				dlTZone = "+1000"
+			case "chut": //Chuuk Time	UTC+10:00
+				dlTZone = "+1000"
+			case "cist": //Clipperton Island Standard Time	UTC−08:00
+				dlTZone = "-0800"
+			case "ckt", "-1000": //Cook Island Time	UTC−10:00
+				dlTZone = "-1000"
+			case "clst": //Chile Summer Time	UTC−03:00
+				dlTZone = "-0300"
+			case "clt": //Chile Standard Time	UTC−04:00
+				dlTZone = "-0400"
+			case "cost": //Colombia Summer Time	UTC−04:00
+				dlTZone = "-0400"
+			case "cot": //Colombia Time	UTC−05:00
+				dlTZone = "-0500"
+			case "cst":
+				return "specify \"Central-Standard\", \"China-Standard\", or \"Cuba-Standard\""
+			case "central-standard", "-0600": //Central Standard Time (Central America)	UTC−06:00
+				dlTZone = "-0600"
+			case "china-standard": //China Standard Time	UTC+08:00
+				dlTZone = "+0800"
+			case "cuba-standard": //Cuba Standard Time	UTC−05:00
+				dlTZone = "-0500"
+			case "cvt": //Cape Verde Time	UTC−01:00
+				dlTZone = "-0100"
+			case "cwst": //Central Western Standard Time (Australia) unofficial	UTC+08:45
+				dlTZone = "+0845"
+			case "cxt", "+0700": //Christmas Island Time	UTC+07:00
+				dlTZone = "+0700"
+			case "davt": //Davis Time	UTC+07:00
+				dlTZone = "+0700"
+			case "ddut": //Dumont d'Urville Time (in French Antarctic station)	UTC+10:00
+				dlTZone = "+1000"
+			case "dft": //AIX-specific equivalent of Central European Time[NB 1]	UTC+01:00
+				dlTZone = "+0100"
+			case "easst": //Easter Island Summer Time	UTC−05:00
+				dlTZone = "-0500"
+			case "east": //Easter Island Standard Time	UTC−06:00
+				dlTZone = "-0600"
+			case "eat": //East Africa Time	UTC+03:00
+				dlTZone = "+0300"
+			case "ect":
+				return "please specify \"Eastern-Caribbean\", or \"Ecuador\"."
+			case "eastern-caribbean": //Eastern Caribbean Time (does not recognise DST)	UTC−04:00
+				dlTZone = "-0400"
+			case "ecuador": //Ecuador Time	UTC−05:00
+				dlTZone = "-0500"
+			case "edt": //Eastern Daylight Time (North America)	UTC−04:00
+				dlTZone = "-0400"
+			case "eest": //Eastern European Summer Time	UTC+03:00
+				dlTZone = "+0300"
+			case "eet": //Eastern European Time	UTC+02:00
+				dlTZone = "+0200"
+			case "egst": //Eastern Greenland Summer Time	UTC+00:00
+				dlTZone = "+0000"
+			case "egt": //Eastern Greenland Time	UTC−01:00
+				dlTZone = "-0100"
+			case "est": //Eastern Standard Time (North America)	UTC−05:00
+				dlTZone = "-0500"
+			case "fet": //Further-eastern European Time	UTC+03:00
+				dlTZone = "+0300"
+			case "fjt": //Fiji Time	UTC+12:00
+				dlTZone = "+1200"
+			case "fkst": //Falkland Islands Summer Time	UTC−03:00
+				dlTZone = "-0300"
+			case "fkt": //Falkland Islands Time	UTC−04:00
+				dlTZone = "-0400"
+			case "fnt": //Fernando de Noronha Time	UTC−02:00
+				dlTZone = "-0200"
+			case "galt": //Galápagos Time	UTC−06:00
+				dlTZone = "-0600"
+			case "gamt": //Gambier Islands Time	UTC−09:00
+				dlTZone = "-0900"
+			case "get": //Georgia Standard Time	UTC+04:00
+				dlTZone = "+0400"
+			case "gft": //French Guiana Time	UTC−03:00
+				dlTZone = "-0300"
+			case "Gilt": //Gilbert Island Time	UTC+12:00
+				dlTZone = "+1200"
+			case "git": //Gambier Island Time	UTC−09:00
+				dlTZone = "-0900"
+			case "gmt": //Greenwich Mean Time	UTC+00:00
+				dlTZone = "+0000"
+			case "gst":
+				return "please specify \"South-Georgia\", or \"Gulf-Standard\""
+			case "south-georgia": //South Georgia and the South Sandwich Islands Time	UTC−02:00
+				dlTZone = "-0200"
+			case "gulf-standard": //Gulf Standard Time	UTC+04:00
+				dlTZone = "+0400"
+			case "gyt": //Guyana Time	UTC−04:00
+				dlTZone = "-0400"
+			case "hdt": //Hawaii–Aleutian Daylight Time	UTC−09:00
+				dlTZone = "-0900"
+			case "haec": //Heure Avancée d'Europe Centrale French-language name for CEST	UTC+02:00
+				dlTZone = "+0200"
+			case "hst": //Hawaii–Aleutian Standard Time	UTC−10:00
+				dlTZone = "-1000"
+			case "hkt": //Hong Kong Time	UTC+08:00
+				dlTZone = "+0800"
+			case "hmt": //Heard and McDonald Islands Time	UTC+05:00
+				dlTZone = "+0500"
+			case "hovst": //Hovd Summer Time (not used from 2017–present)	UTC+08:00
+				dlTZone = "+0800"
+			case "hovt": //Hovd Time	UTC+07:00
+				dlTZone = "+0700"
+			case "ict": //Indochina Time	UTC+07:00
+				dlTZone = "+0700"
+			case "idlw": //International Date Line West time zone	UTC−12:00
+				dlTZone = "-1200"
+			case "idt": //Israel Daylight Time	UTC+03:00
+				dlTZone = "+0300"
+			case "iot": //Indian Ocean Time	UTC+06:00
+				dlTZone = "+0600"
+			case "irdt": //Iran Daylight Time	UTC+04:30
+				dlTZone = "+0430"
+			case "irkt": //Irkutsk Time	UTC+08:00
+				dlTZone = "+0800"
+			case "irst", "+0330": //Iran Standard Time	UTC+03:30
+				dlTZone = "+0330"
+			case "ist":
+				return "please specify \"Indian-Standard\", \"Irish-Standard\", or \"Israel-Standard\""
+			case "indian-standard", "+0530": //Indian Standard Time	UTC+05:30
+				dlTZone = "+0530"
+			case "irish-standard": //Irish Standard Time[8]	UTC+01:00
+				dlTZone = "+0100"
+			case "isreal-standard": //Israel Standard Time	UTC+02:00
+				dlTZone = "+0200"
+			case "jst": //Japan Standard Time	UTC+09:00
+				dlTZone = "+0900"
+			case "kalt": //Kaliningrad Time	UTC+02:00
+				dlTZone = "+0200"
+			case "kgt": //Kyrgyzstan Time	UTC+06:00
+				dlTZone = "+0600"
+			case "kost": //Kosrae Time	UTC+11:00
+				dlTZone = "+1100"
+			case "krat": //Krasnoyarsk Time	UTC+07:00
+				dlTZone = "+0700"
+			case "kst": //Korea Standard Time	UTC+09:00
+				dlTZone = "+0900"
+			case "lhst":
+				return "please specify \"Howe-Standard\", or \"Howe-Summer\""
+			case "howe-standard": //Lord Howe Standard Time	UTC+10:30
+				dlTZone = "+1030"
+			case "howe-summer": //Lord Howe Summer Time	UTC+11:00
+				dlTZone = "+1100"
+			case "lint", "+1400": //Line Islands Time	UTC+14:00
+				dlTZone = "+1400"
+			case "magt": //Magadan Time	UTC+12:00
+				dlTZone = "+1200"
+			case "mart", "-0930": //Marquesas Islands Time	UTC−09:30
+				dlTZone = "-0930"
+			case "mawt": //Mawson Station Time	UTC+05:00
+				dlTZone = "+0500"
+			case "mdt": //Mountain Daylight Time (North America)	UTC−06:00
+				dlTZone = "-0600"
+			case "met": //Middle European Time (same zone as CET)	UTC+01:00
+				dlTZone = "+0100"
+			case "mest": //Middle European Summer Time (same zone as CEST)	UTC+02:00
+				dlTZone = "+0200"
+			case "mht": //Marshall Islands Time	UTC+12:00
+				dlTZone = "+1200"
+			case "mist": //Macquarie Island Station Time	UTC+11:00
+				dlTZone = "+1100"
+			case "mit": //Marquesas Islands Time	UTC−09:30
+				dlTZone = "-0930"
+			case "mmt": //Myanmar Standard Time	UTC+06:30
+				dlTZone = "+0630"
+			case "msk": //Moscow Time	UTC+03:00
+				dlTZone = "+0300"
+			case "mst":
+				return "please specify \"Malaysian\", or \"Mountain-Standard\"."
+			case "malaysian": //Malaysian Standard Time	UTC+08:00
+				dlTZone = "+0800"
+			case "mountain-standard", "-0700": //Mountain Standard Time (North America)	UTC−07:00
+				dlTZone = "-0700"
+			case "mut": //Mauritius Time	UTC+04:00
+				dlTZone = "+0400"
+			case "mvt": //Maldives Time	UTC+05:00
+				dlTZone = "+0500"
+			case "myt": //Malaysia Time	UTC+08:00
+				dlTZone = "+0800"
+			case "nct": //New Caledonia Time	UTC+11:00
+				dlTZone = "+1100"
+			case "ndt", "-0230": //Newfoundland Daylight Time	UTC−02:30
+				dlTZone = "-0230"
+			case "nft": //Norfolk Island Time	UTC+11:00
+				dlTZone = "+1100"
+			case "novt": //Novosibirsk Time [9]	UTC+07:00
+				dlTZone = "+0700"
+			case "npt", "+0545": //Nepal Time	UTC+05:45
+				dlTZone = "+0545"
+			case "nst", "-0330": //Newfoundland Standard Time	UTC−03:30
+				dlTZone = "-0330"
+			case "nt": //Newfoundland Time	UTC−03:30
+				dlTZone = "-0330"
+			case "nut", "-1100": //Niue Time	UTC−11:00
+				dlTZone = "-1100"
+			case "nzdt", "+1300": //New Zealand Daylight Time	UTC+13:00
+				dlTZone = "+1300"
+			case "nzdst": //New Zealand Daylight Saving Time	UTC+13:00
+				dlTZone = "+1300"
+			case "nzst": //New Zealand Standard Time	UTC+12:00
+				dlTZone = "+1200"
+			case "omst": //Omsk Time	UTC+06:00
+				dlTZone = "+0600"
+			case "orat": //Oral Time	UTC+05:00
+				dlTZone = "+0500"
+			case "pdt": //Pacific Daylight Time (North America)	UTC−07:00
+				dlTZone = "-0700"
+			case "pet": //Peru Time	UTC−05:00
+				dlTZone = "-0500"
+			case "pett": //Kamchatka Time	UTC+12:00
+				dlTZone = "+1200"
+			case "pgt": //Papua New Guinea Time	UTC+10:00
+				dlTZone = "+100"
+			case "phot": //Phoenix Island Time	UTC+13:00
+				dlTZone = "+1300"
+			case "pht": //Philippine Time	UTC+08:00
+				dlTZone = "+0800"
+			case "phst": //Philippine Standard Time	UTC+08:00
+				dlTZone = "+0800"
+			case "pkt": //Pakistan Standard Time	UTC+05:00
+				dlTZone = "+0500"
+			case "pmdt": //Saint Pierre and Miquelon Daylight Time	UTC−02:00
+				dlTZone = "-0200"
+			case "pmst": //Saint Pierre and Miquelon Standard Time	UTC−03:00
+				dlTZone = "-0300"
+			case "pont": //Pohnpei Standard Time	UTC+11:00
+				dlTZone = "+1100"
+			case "pst": //Pacific Standard Time (North America)	UTC−08:00
+				dlTZone = "-0800"
+			case "pwt": //Palau Time[11]	UTC+09:00
+				dlTZone = "+0900"
+			case "pyst": //Paraguay Summer Time[12]	UTC−03:00
+				dlTZone = "-0300"
+			case "pyt": //Paraguay Time[13]	UTC−04:00
+				dlTZone = "-0400"
+			case "ret": //Réunion Time	UTC+04:00
+				dlTZone = "+0400"
+			case "rott": //Rothera Research Station Time	UTC−03:00
+				dlTZone = "-0300"
+			case "sakt": //Sakhalin Island Time	UTC+11:00
+				dlTZone = "+1100"
+			case "samt": //Samara Time	UTC+04:00
+				dlTZone = "+0400"
+			case "sast": //South African Standard Time	UTC+02:00
+				dlTZone = "0200"
+			case "sbt": //Solomon Islands Time	UTC+11:00
+				dlTZone = "+1100"
+			case "sct": //Seychelles Time	UTC+04:00
+				dlTZone = "+0400"
+			case "sdt": //Samoa Daylight Time	UTC−10:00
+				dlTZone = "-1000"
+			case "sgt": //Singapore Time	UTC+08:00
+				dlTZone = "+0800"
+			case "slst": //Sri Lanka Standard Time	UTC+05:30
+				dlTZone = "+0530"
+			case "sret": //Srednekolymsk Time	UTC+11:00
+				dlTZone = "+1100"
+			case "srt": //Suriname Time	UTC−03:00
+				dlTZone = "-0300"
+			case "sst": //Samoa Standard Time	UTC−11:00
+				dlTZone = "-1100"
+			case "syot": //Showa Station Time	UTC+03:00
+				dlTZone = "+0300"
+			case "taht": //Tahiti Time	UTC−10:00
+				dlTZone = "-1000"
+			case "tha": //Thailand Standard Time	UTC+07:00
+				dlTZone = "+0700"
+			case "tft": //French Southern and Antarctic Time[14]	UTC+05:00
+				dlTZone = "+0500"
+			case "tjt": //Tajikistan Time	UTC+05:00
+				dlTZone = "+0500"
+			case "tkt": //Tokelau Time	UTC+13:00
+				dlTZone = "+1300"
+			case "tlt": //Timor Leste Time	UTC+09:00
+				dlTZone = "+0900"
+			case "tmt": //Turkmenistan Time	UTC+05:00
+				dlTZone = "+0500"
+			case "trt": //Turkey Time	UTC+03:00
+				dlTZone = "+0300"
+			case "tot": //Tonga Time	UTC+13:00
+				dlTZone = "+1300"
+			case "tst": //Taiwan Standard Time	UTC+08:00
+				dlTZone = "+0800"
+			case "tvt": //Tuvalu Time	UTC+12:00
+				dlTZone = "+1200"
+			case "ulast": //Ulaanbaatar Summer Time	UTC+09:00
+				dlTZone = "+0900"
+			case "ulat": //Ulaanbaatar Standard Time	UTC+08:00
+				dlTZone = "+0800"
+			case "utc": //Coordinated Universal Time	UTC+00:00
+				dlTZone = "+0000"
+			case "uyst": //Uruguay Summer Time	UTC−02:00
+				dlTZone = "-0200"
+			case "uyt": //Uruguay Standard Time	UTC−03:00
+				dlTZone = "-0300"
+			case "uzt": //Uzbekistan Time	UTC+05:00
+				dlTZone = "+0500"
+			case "vet": //Venezuelan Standard Time	UTC−04:00
+				dlTZone = "-0400"
+			case "vlat": //Vladivostok Time	UTC+10:00
+				dlTZone = "+1000"
+			case "volt": //Volgograd Time	UTC+03:00
+				dlTZone = "+0300"
+			case "vost": //Vostok Station Time	UTC+06:00
+				dlTZone = "+0600"
+			case "vut": //Vanuatu Time	UTC+11:00
+				dlTZone = "+1100"
+			case "wakt": //Wake Island Time	UTC+12:00
+				dlTZone = "+1200"
+			case "wast": //West Africa Summer Time	UTC+02:00
+				dlTZone = "+0200"
+			case "wat": //West Africa Time	UTC+01:00
+				dlTZone = "+0100"
+			case "west": //Western European Summer Time	UTC+01:00
+				dlTZone = "+0100"
+			case "wet": //Western European Time	UTC+00:00
+				dlTZone = "+0000"
+			case "wib": //Western Indonesian Time	UTC+07:00
+				dlTZone = "+0700"
+			case "wit": //Eastern Indonesian Time	UTC+09:00
+				dlTZone = "+0900"
+			case "wita": //Central Indonesia Time	UTC+08:00
+				dlTZone = "+0800"
+			case "wgst": //West Greenland Summer Time[15]	UTC−02:00
+				dlTZone = "-0200"
+			case "wgt": //West Greenland Time[16]	UTC−03:00
+				dlTZone = "-0300"
+			case "wst": //Western Standard Time	UTC+08:00
+				dlTZone = "+0800"
+			case "yakt": //Yakutsk Time	UTC+09:00
+				dlTZone = "+0900"
+			case "yekt": //Yekaterinburg Time	UTC+05:00
+				dlTZone = "+0500"
+			default:
+				return "Problem with time zone. " + wrongSyntaxMessage
+			}
+			// concatenate dline
+			dline := dlMonth + " " + dlDay + " " + dlYear + " " + dlTimeHours + ":" + dlTimeMins + dlm + " " + dlTZone
+			// character limits
 			if len(alarmComment) > 164 || len(alarmName) > 50 {
 				return "Name or comment too long, max 50 for name & 164 for comment"
 			}
-			/*if firstSpaceIndex == 0 || secondSpaceIndex == 0 || thirdSpaceIndex == 0 {
-				return wrongSyntaxMessage
-			}*/
 
 			alm := &alarm.Alarm{
 				ChannelID: m.ChannelID,
@@ -325,8 +1059,13 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 				UserID:    m.Author.ID,
 				ServerID:  m.GuildID,
 			}
+			parsedTime, err := time.Parse("01 02 2006 03:04PM -0700", dline)
+			if err != nil {
+				fmt.Println(err)
+			}
+			unixTime := parsedTime.Unix()
 
-			s.ChannelMessageSend(m.ChannelID, alarmName+" set for "+dline)
+			s.ChannelMessageSend(m.ChannelID, alarmName+" set for "+"<t:"+strconv.FormatInt(unixTime, 10)+":F>")
 			UserManager.GetUser(m.Author.ID, s, ServerManager).AlarmManager.SetAlarm(alm, s, m.ChannelID)
 			return "No response"
 		} else {
@@ -362,7 +1101,12 @@ func ListAlarms(userid string, channelid string) {
 		if v.Deadline == "01 02 2006 03:04PM -0700" {
 			continue
 		}
-		alarmlist = append(alarmlist, "- "+"Alarm "+strconv.Itoa(i+1)+": "+v.Name+" "+v.Deadline+" "+v.Content+"\n")
+		parsedTime, err := time.Parse("01 02 2006 03:04PM -0700", v.Deadline)
+		if err != nil {
+			fmt.Println(err)
+		}
+		unixTime := parsedTime.Unix()
+		alarmlist = append(alarmlist, "- "+"Alarm "+strconv.Itoa(i+1)+": "+v.Name+" <t:"+strconv.FormatInt(unixTime, 10)+":F> "+v.Content+"\n")
 	}
 	var splitMessage func(aList []string)
 
