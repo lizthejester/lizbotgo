@@ -18,11 +18,14 @@ type Alarm struct {
 	Name      string
 	UserID    string
 	ServerID  string
+	LoopFreq  string
 }
 
 func (m *AlarmManager) GetAlarms() []Alarm {
 	return m.Alarms
 }
+
+var SetAlarm func(m *AlarmManager) (alarm *Alarm, session *discordgo.Session, channelid string)
 
 func (m *AlarmManager) SetAlarm(alarm *Alarm, session *discordgo.Session, channelid string) {
 	fmt.Println("Attempting to set alarm", alarm.Name)
@@ -41,4 +44,20 @@ func (m *AlarmManager) SetAlarm(alarm *Alarm, session *discordgo.Session, channe
 	}
 	session.ChannelMessageSend(channelid, alarm.Name+" went off!")
 	m.Alarms[alarmIndex].Deadline = "01 02 2006 03:04PM -0700"
+	switch alarm.LoopFreq {
+	case "daily":
+		alarm.Deadline = deadlineTime.AddDate(0, 0, 1).Format("01 02 2006 03:04PM -0700")
+		m.SetAlarm(alarm, session, channelid)
+	case "weekly":
+		alarm.Deadline = deadlineTime.AddDate(0, 0, 7).Format("01 02 2006 03:04PM -0700")
+		m.SetAlarm(alarm, session, channelid)
+	case "monthly":
+		alarm.Deadline = deadlineTime.AddDate(0, 1, 0).Format("01 02 2006 03:04PM -0700")
+		m.SetAlarm(alarm, session, channelid)
+	case "yearly":
+		alarm.Deadline = deadlineTime.AddDate(1, 0, 0).Format("01 02 2006 03:04PM -0700")
+		m.SetAlarm(alarm, session, channelid)
+	default:
+		return
+	}
 }

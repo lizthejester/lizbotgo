@@ -228,9 +228,10 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 		return response
 	}
 	if strings.HasPrefix(lowered, "set alarm for") {
-		//example command: "set alarm for (month) (day) (year) ((time)AM/PM) (timezone) (name) (comment string)"
-		//note: use of military time does not require colon in time, declaration of AM/PM, but does require timezones.
-		wrongSyntaxMessage := "Syntax is: month day year 03:04PM timezone \"Name\" Description \n Example: April 20th 2024 04:20pm PST \"smokin'\" That Jazz Cabbage \n Example: 04 20 24 0420 -0800 \"smokin\" that jazz cabbage"
+		// example command: "set alarm for (month) (day) (year) ((time)AM/PM) (timezone) ("name") (loop frequency) ("comment string")"
+		// note: use of military time does not require colon in time, declaration of AM/PM, but does require timezones.
+		// note: any value of loop frequency that is not "daily", "weekly", "monthly", or "yearly" will prevent an alarm from looping but one must be present or the first word of the comment will be used as the loop frequency and the comment will be printed without the first word.
+		wrongSyntaxMessage := "Syntax is: month day year 03:04PM timezone \"Name\" \"Description\" loopFrequency \n Example: April 20th 2024 04:20pm PST \"smokin'\" \"That Jazz Cabbage\" daily \n Example: 04 20 24 0420 -0800 \"smokin\" \"that jazz cabbage\" daily"
 		// indexes for parsing user input
 		if len(lowered) > 14 {
 			firstSpaceIndex := 0
@@ -238,7 +239,8 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			thirdSpaceIndex := 0
 			fourthSpaceIndex := 0
 			fifthSpaceIndex := 0
-
+			sixthSpaceIndex := 0
+			seventhSpaceIndex := 0
 			for i := 15; firstSpaceIndex == 0; i++ {
 				if string(lowered[i]) == " " {
 					firstSpaceIndex = i
@@ -289,7 +291,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 					break
 				}
 			}
-			// set index of closing quotation mark
+			// set index of closing quotation mark on field "Name"
 			secondQuotationMark := 0
 			if string(lowered[fifthSpaceIndex+1]) == "\"" {
 				for i := fifthSpaceIndex + 2; secondQuotationMark == 0; i++ {
@@ -303,9 +305,44 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			} else {
 				return "Missing quotation mark. " + wrongSyntaxMessage
 			}
+			for i := fifthSpaceIndex + 1; sixthSpaceIndex == 0; i++ {
+				if string(lowered[i]) == " " {
+					sixthSpaceIndex = i
+				}
+				if i == len(lowered) {
+					return "Not enough spaces. " + wrongSyntaxMessage
+				}
+			}
+			// reference: (month)1(day)2(year)3((time)AM/PM)4(timezone)5("name")(2q)(6)("comment string")(4q)(7)(loop frequency)
+			fourthQuotationMark := 0
+			if string(lowered[sixthSpaceIndex+1]) == "\"" {
+				for i := sixthSpaceIndex + 2; fourthQuotationMark == 0; i++ {
+					if string(lowered[i]) == "\"" {
+						fourthQuotationMark = i
+					}
+					if i == len(lowered) {
+						return "Missing quotation mark. " + wrongSyntaxMessage
+					}
+				}
+			} else {
+				return "Missing quotation mark. " + wrongSyntaxMessage
+			}
+			var loopFreq string
+			if len(lowered)-1 != fourthQuotationMark {
+				for i := fourthQuotationMark + 1; seventhSpaceIndex == 0; i++ {
+					if string(lowered[i]) == " " {
+						seventhSpaceIndex = i
+					}
+					if i == len(lowered)-1 {
+						return "Not enough spaces. " + wrongSyntaxMessage
+					}
+				}
+				loopFreq = userInput[seventhSpaceIndex+1:]
+			}
+			// reference: (month)1(day)2(year)3((time)AM/PM)4(timezone)5("name")(2q)(6)("comment string")(4q)(7)(loop frequency)
 			// parse user input. switches allow for dynamic input and some typos.
 			alarmName := userInput[fifthSpaceIndex+2 : secondQuotationMark]
-			alarmComment := userInput[secondQuotationMark+1:]
+			alarmComment := userInput[sixthSpaceIndex+2 : fourthQuotationMark]
 			dlMonth := lowered[14:firstSpaceIndex]
 			switch dlMonth {
 			case "january", "jan", "1", "01":
@@ -1039,8 +1076,8 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			// concatenate dline
 			dline := dlMonth + " " + dlDay + " " + dlYear + " " + dlTimeHours + ":" + dlTimeMins + dlm + " " + dlTZone
 			// character limits
-			if len(alarmComment) > 164 || len(alarmName) > 50 {
-				return "Name or comment too long, max 50 for name & 164 for comment"
+			if len(alarmComment) > 100 || len(alarmName) > 50 {
+				return "Name or comment too long, max 50 for name & 100 for comment"
 			}
 
 			alm := &alarm.Alarm{
@@ -1048,6 +1085,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 				Deadline:  dline,
 				Content:   alarmComment,
 				Name:      alarmName,
+				LoopFreq:  loopFreq,
 				UserID:    m.Author.ID,
 				ServerID:  m.GuildID,
 			}
@@ -1069,7 +1107,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 	}
 	if lowered == "list my alarms" {
 		ListAlarms(m.Author.ID, m.ChannelID)
-		return "Alarms listed!"
+		return "No response"
 	}
 	if strings.HasPrefix(lowered, "delete alarm") {
 		index, err := strconv.Atoi(lowered[13:])
@@ -1093,17 +1131,23 @@ func DeleteAlarm(userid string, channnelid string, i int) {
 	UserManager.GetUser(userid, s, ServerManager).AlarmManager.Alarms[i-1].Deadline = "01 02 2006 03:04PM -0700"
 }
 func ListAlarms(userid string, channelid string) {
+	// alarmlist empty slice of strings
 	alarmlist := []string{}
+	//range alarms per user (message author)
 	for i, v := range UserManager.GetUser(userid, s, ServerManager).AlarmManager.Alarms {
+		// skip entries with emptied time
 		if v.Deadline == "01 02 2006 03:04PM -0700" {
 			continue
 		}
+		// parse deadline of current alarm in to format
 		parsedTime, err := time.Parse("01 02 2006 03:04PM -0700", v.Deadline)
 		if err != nil {
 			fmt.Println(err)
 		}
+		//turns parsed time in to unix timestamp
 		unixTime := parsedTime.Unix()
-		alarmlist = append(alarmlist, "- "+"Alarm "+strconv.Itoa(i+1)+": "+v.Name+" <t:"+strconv.FormatInt(unixTime, 10)+":F> "+v.Content+"\n")
+		// concatenate alarmlist entry and append to alarmlist
+		alarmlist = append(alarmlist, "- "+"Alarm "+strconv.Itoa(i+1)+": "+v.Name+" <t:"+strconv.FormatInt(unixTime, 10)+":F> "+v.Content+" "+v.LoopFreq+"\n")
 	}
 	// splits message in to 8 alarms per message
 	var splitMessage func(aList []string)
@@ -1115,6 +1159,9 @@ func ListAlarms(userid string, channelid string) {
 			}
 			s.ChannelMessageSend(channelid, divMessage)
 			splitMessage(aList[8:])
+		} else if len(aList) == 0 {
+			divMessage := "No alarms! :)"
+			s.ChannelMessageSend(channelid, divMessage)
 		} else {
 			var divMessage string
 			for _, v := range aList {
@@ -1154,13 +1201,14 @@ func SaveAlarms() {
 			if thisAlarm.Deadline == emptiedTime {
 				continue
 			} else {
-				_, err = db.Exec("insert into alarms (name, time, comment, channelid, userid, serverid) values(?, ?, ?, ?, ?, ?)",
+				_, err = db.Exec("insert into alarms (name, time, comment, channelid, userid, serverid, loopfreq) values(?, ?, ?, ?, ?, ?, ?)",
 					thisAlarm.Name,
 					thisAlarm.Deadline,
 					thisAlarm.Content,
 					thisAlarm.ChannelID,
 					thisAlarm.UserID,
 					thisAlarm.ServerID,
+					thisAlarm.LoopFreq,
 				)
 				if err != nil {
 					fmt.Println(err)
@@ -1237,7 +1285,7 @@ func LoadAlarms() {
 	for rows.Next() {
 		var newalarm alarm.Alarm
 		var dbid int
-		if err = rows.Scan(&dbid, &newalarm.Name, &newalarm.Deadline, &newalarm.Content, &newalarm.ChannelID, &newalarm.UserID, &newalarm.ServerID); err != nil {
+		if err = rows.Scan(&dbid, &newalarm.Name, &newalarm.Deadline, &newalarm.Content, &newalarm.ChannelID, &newalarm.UserID, &newalarm.ServerID, &newalarm.LoopFreq); err != nil {
 			fmt.Println(err)
 		}
 		_ = UserManager.GetUser(newalarm.UserID, s, ServerManager)
@@ -1298,7 +1346,7 @@ func main() {
 		fmt.Println(err)
 	}
 	// create table "alarms" if it doesnt exist
-	sqlstatement = "create table if not exists alarms (id integer not null primary key, name text, time text, comment text, channelid text, userid text, serverid text)"
+	sqlstatement = "create table if not exists alarms (id integer not null primary key, name text, time text, comment text, channelid text, userid text, serverid text, loopfreq text)"
 	_, err = db.Exec(sqlstatement)
 	if err != nil {
 		fmt.Println(err)

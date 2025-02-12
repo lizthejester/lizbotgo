@@ -61,28 +61,12 @@ func (m *UserManager) InitAlarms(userid string, session *discordgo.Session, sm *
 		fmt.Println(err)
 	}
 	defer rows.Close()
-	/*for rows.Next() {
-		var newalarm alarm.Alarm
-		var dbid int
-		if err = rows.Scan(&dbid, &newalarm.Name, &newalarm.Deadline, &newalarm.Content, &newalarm.ChannelID, &newalarm.UserID); err != nil {
-			fmt.Println(err, dbid)
-		}
-		deadlineTime, err := time.Parse("01 02 2006 03:04PM -0700", newalarm.Deadline)
-		if err != nil {
-			fmt.Println(err)
-		}
-		if time.Until(deadlineTime) <= 0 {
-			_, err = db.Exec("delete from alarms where time = ?", newalarm.Deadline)
-			if err != nil {
-				fmt.Println(err)
-			}
-		}
-	}*/
+
 	for rows.Next() {
 		var newalarm alarm.Alarm
 		var dbid int
 		var deadlineString string
-		if err = rows.Scan(&dbid, &newalarm.Name, &deadlineString, &newalarm.Content, &newalarm.ChannelID, &newalarm.UserID, &newalarm.ServerID); err != nil {
+		if err = rows.Scan(&dbid, &newalarm.Name, &deadlineString, &newalarm.Content, &newalarm.ChannelID, &newalarm.UserID, &newalarm.ServerID, &newalarm.LoopFreq); err != nil {
 			fmt.Println(err, dbid)
 		}
 		newalarm.Deadline = deadlineString
