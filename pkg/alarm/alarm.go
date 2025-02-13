@@ -42,7 +42,7 @@ func (m *AlarmManager) SetAlarm(alarm *Alarm, session *discordgo.Session, channe
 	if m.Alarms[alarmIndex].Deadline == "01 02 2006 03:04PM -0700" {
 		return
 	}
-	session.ChannelMessageSend(channelid, alarm.Name+" went off!")
+	session.ChannelMessageSend(channelid, "<@"+alarm.UserID+"> "+alarm.Name+" went off!\n"+alarm.Content)
 	m.Alarms[alarmIndex].Deadline = "01 02 2006 03:04PM -0700"
 	switch alarm.LoopFreq {
 	case "daily":

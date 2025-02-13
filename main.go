@@ -17,6 +17,7 @@ import (
 	"github.com/lizthejester/lizbotgo/pkg/alarm"
 	"github.com/lizthejester/lizbotgo/pkg/chanselect"
 	"github.com/lizthejester/lizbotgo/pkg/config"
+	"github.com/lizthejester/lizbotgo/pkg/explain"
 	"github.com/lizthejester/lizbotgo/pkg/inspire"
 	"github.com/lizthejester/lizbotgo/pkg/roll"
 	"github.com/lizthejester/lizbotgo/pkg/user"
@@ -71,14 +72,34 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 	// COMMAND LIST
 	//set main channel
 	if lowered == "set main channel" {
-		ServerManager.GetServer(m.GuildID).SetChannel(m.ChannelID)
-		fmt.Println(ServerManager.GetServer(m.GuildID).MainChannel)
-		return "Main channel set!"
+		perms, err := s.UserChannelPermissions(m.Author.ID, m.ChannelID)
+		if err != nil {
+			fmt.Println(err)
+		}
+		if perms&discordgo.PermissionManageMessages == discordgo.PermissionManageMessages {
+			ServerManager.GetServer(m.GuildID).SetChannel(m.ChannelID)
+			fmt.Println(ServerManager.GetServer(m.GuildID).MainChannel)
+			return "Main channel set!"
+		} else {
+			return "Not Admin."
+		}
 	}
 	// command list
 	if lowered == "command list" {
 		directory := "?magic8ball\n?flip a coin\n?roll a d4, d6, d8, d10, d12, or d20\n?inspire\n?joke\n?lizdate"
 		return directory
+	}
+	// explain
+	if strings.HasPrefix(lowered, "explain") {
+		if len(lowered) > 7 {
+			resp, err := explain.Explain(s, m, lowered[8:])
+			if err != nil {
+				fmt.Println(err)
+			}
+			return resp
+		} else {
+			return "Hold a vote on what?"
+		}
 	}
 	// chat
 	switch lowered {
@@ -205,11 +226,13 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 		if firstSpaceIndex == 0 || secondSpaceIndex == 0 {
 			return "That command looks wrong"
 		}
+
 		gregDay, err := strconv.Atoi(lowered[8:(firstSpaceIndex)])
 		if err != nil {
 			return "Formatting error; First argument should be a number (Day)"
 		}
 		fmt.Println("gregday:", gregDay)
+
 		gregMonth := userInput[(firstSpaceIndex + 1):(secondSpaceIndex)]
 		switch gregMonth {
 		case "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December":
@@ -218,11 +241,13 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			return "Formatting error; Second argument should be a Gregorian month (i.e. January)"
 		}
 		fmt.Println("gregmonth:", gregMonth)
+
 		gregYear, err2 := strconv.Atoi(lowered[(secondSpaceIndex + 1):])
 		if err2 != nil {
 			return "Formatting error; Third argument should be a number (Year)"
 		}
 		fmt.Println("gregyear:", gregYear)
+
 		lizMonth, lizDay := ltime.GetDayMonth(gregYear, gregMonth, gregDay)
 		response := strconv.Itoa(lizDay) + " " + lizMonth + ", " + ltime.GetDayOfWeek(lizDay, lizMonth)
 		return response
@@ -239,8 +264,6 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			thirdSpaceIndex := 0
 			fourthSpaceIndex := 0
 			fifthSpaceIndex := 0
-			sixthSpaceIndex := 0
-			seventhSpaceIndex := 0
 			for i := 15; firstSpaceIndex == 0; i++ {
 				if string(lowered[i]) == " " {
 					firstSpaceIndex = i
@@ -305,18 +328,10 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			} else {
 				return "Missing quotation mark. " + wrongSyntaxMessage
 			}
-			for i := fifthSpaceIndex + 1; sixthSpaceIndex == 0; i++ {
-				if string(lowered[i]) == " " {
-					sixthSpaceIndex = i
-				}
-				if i == len(lowered) {
-					return "Not enough spaces. " + wrongSyntaxMessage
-				}
-			}
 			// reference: (month)1(day)2(year)3((time)AM/PM)4(timezone)5("name")(2q)(6)("comment string")(4q)(7)(loop frequency)
 			fourthQuotationMark := 0
-			if string(lowered[sixthSpaceIndex+1]) == "\"" {
-				for i := sixthSpaceIndex + 2; fourthQuotationMark == 0; i++ {
+			if string(lowered[secondQuotationMark+2]) == "\"" {
+				for i := secondQuotationMark + 3; fourthQuotationMark == 0; i++ {
 					if string(lowered[i]) == "\"" {
 						fourthQuotationMark = i
 					}
@@ -329,50 +344,46 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			}
 			var loopFreq string
 			if len(lowered)-1 != fourthQuotationMark {
-				for i := fourthQuotationMark + 1; seventhSpaceIndex == 0; i++ {
+				/*for i := fourthQuotationMark + 1; seventhSpaceIndex == 0; i++ {
 					if string(lowered[i]) == " " {
 						seventhSpaceIndex = i
 					}
 					if i == len(lowered)-1 {
 						return "Not enough spaces. " + wrongSyntaxMessage
 					}
-				}
-				loopFreq = userInput[seventhSpaceIndex+1:]
+				}*/
+				loopFreq = userInput[fourthQuotationMark+2:]
 			}
 			// reference: (month)1(day)2(year)3((time)AM/PM)4(timezone)5("name")(2q)(6)("comment string")(4q)(7)(loop frequency)
 			// parse user input. switches allow for dynamic input and some typos.
 			alarmName := userInput[fifthSpaceIndex+2 : secondQuotationMark]
-			alarmComment := userInput[sixthSpaceIndex+2 : fourthQuotationMark]
-			dlMonth := lowered[14:firstSpaceIndex]
-			switch dlMonth {
-			case "january", "jan", "1", "01":
-				dlMonth = "01"
-			case "february", "feb", "2", "02":
-				dlMonth = "02"
-			case "march", "mar", "3", "03":
-				dlMonth = "03"
-			case "april", "apr", "4", "04":
-				dlMonth = "04"
-			case "may", "5", "05":
-				dlMonth = "05"
-			case "june", "jun", "6", "06":
-				dlMonth = "06"
-			case "july", "jul", "7", "07":
-				dlMonth = "07"
-			case "august", "aug", "8", "08":
-				dlMonth = "08"
-			case "september", "sep", "9", "09":
-				dlMonth = "09"
-			case "october", "oct", "10":
-				dlMonth = "10"
-			case "november", "nov", "11":
-				dlMonth = "11"
-			case "december", "dec", "12":
-				dlMonth = "12"
-			default:
-				return "Problem with month. " + wrongSyntaxMessage
-			}
+			alarmComment := userInput[secondQuotationMark+3 : fourthQuotationMark]
 			dlDay := lowered[firstSpaceIndex+1 : secondSpaceIndex]
+			dlMonth := lowered[14:firstSpaceIndex]
+			dlDayInt, err := strconv.Atoi(dlDay)
+			if err != nil {
+				fmt.Println(err)
+			}
+			leapYear := false
+			dlYear := lowered[secondSpaceIndex+1 : thirdSpaceIndex]
+			// dlYear
+			if len(dlYear) == 2 {
+				dlYear = "20" + dlYear
+			}
+			if len(dlYear) > 4 {
+				return "Year too long. " + wrongSyntaxMessage
+			}
+			if len(dlYear) < 2 {
+				return "Year too short. " + wrongSyntaxMessage
+			}
+			dlYearInt, err := strconv.Atoi(dlYear)
+			if err != nil {
+				fmt.Println(err)
+			}
+			if dlYearInt%4 == 0 {
+				leapYear = true
+			}
+			//dlDay switch
 			switch dlDay {
 			case "01", "1", "first", "1st":
 				dlDay = "01"
@@ -436,19 +447,324 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 				dlDay = "30"
 			case "31", "thirtyfirst", "31st":
 				dlDay = "31"
+			case "32", "thirtysecond", "32nd":
+				dlDay = "32"
+			case "33", "thirtthird", "33rd":
+				dlDay = "33"
+			case "34", "thirtyfourth", "34th":
+				dlDay = "34"
+			case "35", "thirtyfifth", "35th":
+				dlDay = "35"
+			case "36", "thirtysixth", "36th":
+				dlDay = "36"
+			case "37", "thirtseventhh", "37th":
+				dlDay = "37"
+			case "38", "thirtyeighth", "38th":
+				dlDay = "38"
 			default:
 				return "Problem with day. " + wrongSyntaxMessage
 			}
-			dlYear := lowered[secondSpaceIndex+1 : thirdSpaceIndex]
-			if len(dlYear) == 2 {
-				dlYear = "20" + dlYear
+			// dlMonth switches
+			if leapYear {
+				switch dlMonth {
+				case "january", "jan", "1", "01":
+					dlMonth = "01"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "february", "feb", "2", "02":
+					dlMonth = "02"
+					if dlDayInt > 29 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "march", "mar", "3", "03":
+					dlMonth = "03"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "april", "apr", "4", "04":
+					dlMonth = "04"
+					if dlDayInt > 30 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "may", "5", "05":
+					dlMonth = "05"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "june", "jun", "6", "06":
+					dlMonth = "06"
+					if dlDayInt > 30 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "july", "jul", "7", "07":
+					dlMonth = "07"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "august", "aug", "8", "08":
+					dlMonth = "08"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "september", "sep", "9", "09":
+					dlMonth = "09"
+					if dlDayInt > 30 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "october", "oct", "10":
+					dlMonth = "10"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "november", "nov", "11":
+					dlMonth = "11"
+					if dlDayInt > 30 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "december", "dec", "12":
+					dlMonth = "12"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "menotheen":
+					if dlDayInt > 31 {
+						dlDay = strconv.Itoa(dlDayInt - 31)
+						dlMonth = "02"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt)
+						dlMonth = "01"
+					}
+				case "lengten":
+					if dlDayInt > 24 {
+						dlDay = strconv.Itoa(dlDayInt - 24)
+						dlMonth = "03"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 5)
+						dlMonth = "02"
+					}
+				case "regen":
+					if dlDayInt > 18 {
+						dlDay = strconv.Itoa(dlDayInt - 18)
+						dlMonth = "04"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 13)
+						dlMonth = "03"
+					}
+				case "leorar":
+					if dlDayInt > 12 {
+						dlDay = strconv.Itoa(dlDayInt - 12)
+						dlMonth = "05"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 18)
+						dlMonth = "04"
+					}
+				case "mysund":
+					if dlDayInt > 6 {
+						dlDay = strconv.Itoa(dlDayInt - 6)
+						dlMonth = "06"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 25)
+						dlMonth = "05"
+					}
+				case "heisswerm":
+					if dlDayInt > 31 {
+						dlDay = strconv.Itoa(dlDayInt - 31)
+						dlMonth = "08"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt)
+						dlMonth = "07"
+					}
+				case "largaheiss":
+					if dlDayInt > 25 {
+						dlDay = strconv.Itoa(dlDayInt - 25)
+						dlMonth = "09"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 6)
+						dlMonth = "08"
+					}
+				case "pommois":
+					if dlDayInt > 19 {
+						dlDay = strconv.Itoa(dlDayInt - 19)
+						dlMonth = "10"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 11)
+						dlMonth = "09"
+					}
+				case "spinnan":
+					if dlDayInt > 13 {
+						dlDay = strconv.Itoa(dlDayInt - 13)
+						dlMonth = "11"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 18)
+						dlMonth = "10"
+					}
+				case "kalt":
+					if dlDayInt > 7 {
+						dlDay = strconv.Itoa(dlDayInt - 7)
+						dlMonth = "12"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 23)
+						dlMonth = "11"
+					}
+				default:
+					return "Problem with month. " + wrongSyntaxMessage
+				}
+			} else {
+				switch dlMonth {
+				case "january", "jan", "1", "01":
+					dlMonth = "01"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "february", "feb", "2", "02":
+					dlMonth = "02"
+					if dlDayInt > 28 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "march", "mar", "3", "03":
+					dlMonth = "03"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "april", "apr", "4", "04":
+					dlMonth = "04"
+					if dlDayInt > 30 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "may", "5", "05":
+					dlMonth = "05"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "june", "jun", "6", "06":
+					dlMonth = "06"
+					if dlDayInt > 30 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "july", "jul", "7", "07":
+					dlMonth = "07"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "august", "aug", "8", "08":
+					dlMonth = "08"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "september", "sep", "9", "09":
+					dlMonth = "09"
+					if dlDayInt > 30 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "october", "oct", "10":
+					dlMonth = "10"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "november", "nov", "11":
+					dlMonth = "11"
+					if dlDayInt > 30 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "december", "dec", "12":
+					dlMonth = "12"
+					if dlDayInt > 31 {
+						return "Problem with day. " + wrongSyntaxMessage
+					}
+				case "menotheen":
+					if dlDayInt > 31 {
+						dlDay = strconv.Itoa(dlDayInt - 31)
+						dlMonth = "02"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt)
+						dlMonth = "01"
+					}
+				case "lengten":
+					if dlDayInt > 23 {
+						dlDay = strconv.Itoa(dlDayInt - 23)
+						dlMonth = "03"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 5)
+						dlMonth = "02"
+					}
+				case "regen":
+					if dlDayInt > 17 {
+						dlDay = strconv.Itoa(dlDayInt - 17)
+						dlMonth = "04"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 14)
+						dlMonth = "03"
+					}
+				case "leorar":
+					if dlDayInt > 11 {
+						dlDay = strconv.Itoa(dlDayInt - 11)
+						dlMonth = "05"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 19)
+						dlMonth = "04"
+					}
+				case "mysund":
+					if dlDayInt > 5 && dlDayInt < 36 {
+						dlDay = strconv.Itoa(dlDayInt - 5)
+						dlMonth = "06"
+					} else if dlDayInt == 36 {
+						dlDay = "01"
+						dlMonth = "07"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 26)
+						dlMonth = "05"
+					}
+				case "heisswerm":
+					if dlDayInt > 30 {
+						dlDay = strconv.Itoa(dlDayInt - 30)
+						dlMonth = "07"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 1)
+						dlMonth = "06"
+					}
+				case "largaheiss":
+					if dlDayInt > 24 {
+						dlDay = strconv.Itoa(dlDayInt - 24)
+						dlMonth = "09"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 7)
+						dlMonth = "08"
+					}
+				case "pommois":
+					if dlDayInt > 18 {
+						dlDay = strconv.Itoa(dlDayInt - 18)
+						dlMonth = "10"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 12)
+						dlMonth = "09"
+					}
+				case "spinnan":
+					if dlDayInt > 12 {
+						dlDay = strconv.Itoa(dlDayInt - 12)
+						dlMonth = "11"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 19)
+						dlMonth = "10"
+					}
+				case "kalt":
+					if dlDayInt > 6 {
+						dlDay = strconv.Itoa(dlDayInt - 6)
+						dlMonth = "12"
+					} else {
+						dlDay = strconv.Itoa(dlDayInt + 24)
+						dlMonth = "11"
+					}
+				default:
+					return "Problem with month. " + wrongSyntaxMessage
+				}
 			}
-			if len(dlYear) > 4 {
-				return "Year too long. " + wrongSyntaxMessage
-			}
-			if len(dlYear) < 2 {
-				return "Year too short. " + wrongSyntaxMessage
-			}
+
+			// Lizian parsing
+			//dlDayInt, err := strconv.Atoi(dlDay)
+			//dlYearInt, err := strconv.Atoi(dlYear)
+			//lmonth, lday := ltime.GetDayMonth(dlYearInt, dlMonth, dlDayInt)
+
 			// military time conversion
 			hasColon := true
 			if colonIndex == 0 {
@@ -1074,6 +1390,9 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 				return "Problem with time zone. " + wrongSyntaxMessage
 			}
 			// concatenate dline
+			if len(dlDay) == 1 {
+				dlDay = "0" + dlDay
+			}
 			dline := dlMonth + " " + dlDay + " " + dlYear + " " + dlTimeHours + ":" + dlTimeMins + dlm + " " + dlTZone
 			// character limits
 			if len(alarmComment) > 100 || len(alarmName) > 50 {
@@ -1133,29 +1452,79 @@ func DeleteAlarm(userid string, channnelid string, i int) {
 func ListAlarms(userid string, channelid string) {
 	// alarmlist empty slice of strings
 	alarmlist := []string{}
+	Lalarmlist := []string{}
 	//range alarms per user (message author)
 	for i, v := range UserManager.GetUser(userid, s, ServerManager).AlarmManager.Alarms {
 		// skip entries with emptied time
 		if v.Deadline == "01 02 2006 03:04PM -0700" {
 			continue
 		}
-		// parse deadline of current alarm in to format
+		// parse deadline of current alarm in to Time Package format
 		parsedTime, err := time.Parse("01 02 2006 03:04PM -0700", v.Deadline)
 		if err != nil {
 			fmt.Println(err)
 		}
-		//turns parsed time in to unix timestamp
+		// turns parsed time in to unix timestamp
 		unixTime := parsedTime.Unix()
+		// parse to Lizian Time
+		dlYear := v.Deadline[6:10]
+		gYear, err := strconv.Atoi(dlYear)
+		if err != nil {
+			fmt.Println(err)
+		}
+		dlMonth := v.Deadline[:2]
+		var gMonth string
+		switch dlMonth {
+		case "01":
+			gMonth = "January"
+		case "02":
+			gMonth = "February"
+		case "03":
+			gMonth = "March"
+		case "04":
+			gMonth = "April"
+		case "05":
+			gMonth = "May"
+		case "06":
+			gMonth = "June"
+		case "07":
+			gMonth = "July"
+		case "08":
+			gMonth = "August"
+		case "09":
+			gMonth = "September"
+		case "10":
+			gMonth = "October"
+		case "11":
+			gMonth = "November"
+		case "12":
+			gMonth = "December"
+		}
+		dlDay := v.Deadline[3:5]
+		gDay, err := strconv.Atoi(dlDay)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		lizianMonth, lizianDay := ltime.GetDayMonth(gYear, gMonth, gDay)
 		// concatenate alarmlist entry and append to alarmlist
 		alarmlist = append(alarmlist, "- "+"Alarm "+strconv.Itoa(i+1)+": "+v.Name+" <t:"+strconv.FormatInt(unixTime, 10)+":F> "+v.Content+" "+v.LoopFreq+"\n")
+		Lalarmlist = append(Lalarmlist, "- "+"Alarm "+strconv.Itoa(i+1)+": "+v.Name+" "+lizianMonth+" "+strconv.Itoa(lizianDay)+" "+dlYear+" <t:"+strconv.FormatInt(unixTime, 10)+":t> "+ltime.GetDayOfWeek(lizianDay, lizianMonth)+"\n")
 	}
 	// splits message in to 8 alarms per message
+	messagecounter := 0
 	var splitMessage func(aList []string)
 	splitMessage = func(aList []string) {
+		header := "**Alarms(Gregorian Time):** \n"
 		if len(aList) > 8 {
 			var divMessage string
 			for _, v := range aList[:8] {
-				divMessage = divMessage + v
+				messagecounter += 1
+				if messagecounter == 1 {
+					divMessage = header + divMessage + v
+				} else {
+					divMessage = divMessage + v
+				}
 			}
 			s.ChannelMessageSend(channelid, divMessage)
 			splitMessage(aList[8:])
@@ -1165,13 +1534,51 @@ func ListAlarms(userid string, channelid string) {
 		} else {
 			var divMessage string
 			for _, v := range aList {
-				divMessage = divMessage + v
+				if messagecounter > 1 {
+					divMessage = divMessage + v
+				} else {
+					divMessage = header + divMessage + v
+				}
+			}
+			s.ChannelMessageSend(channelid, divMessage)
+		}
+	}
+	// separate splitter for Lizian times (necessary for formatting)
+	Lmessagecounter := 0
+	var splitMessageL func(aList []string)
+	splitMessageL = func(aList []string) {
+		header := "**Alarms(Lizian Time):** \n"
+		if len(aList) > 8 {
+			var divMessage string
+			for _, v := range aList[:8] {
+				Lmessagecounter += 1
+				if Lmessagecounter == 1 {
+					divMessage = header + divMessage + v
+				} else {
+					divMessage = divMessage + v
+				}
+			}
+			s.ChannelMessageSend(channelid, divMessage)
+			splitMessageL(aList[8:])
+		} else if len(aList) == 0 {
+			divMessage := "No alarms! :)"
+			s.ChannelMessageSend(channelid, divMessage)
+		} else {
+			var divMessage string
+			for _, v := range aList {
+				if Lmessagecounter > 1 {
+					divMessage = divMessage + v
+				} else {
+					divMessage = header + divMessage + v
+				}
 			}
 			s.ChannelMessageSend(channelid, divMessage)
 		}
 	}
 
+	splitMessageL(Lalarmlist)
 	splitMessage(alarmlist)
+
 }
 func SaveServers() {
 	db, err := sql.Open("sqlite3", "file:lizbot.db?cache=shared&_timeout=1000")
@@ -1248,6 +1655,28 @@ func SendExpiredAlarms() {
 		alarmList := []string{}
 		for _, alarm := range server.ExpiredAlarmManager.Alarms {
 			alarmList = append(alarmList, "<@"+alarm.UserID+"> "+alarm.Name+" has gone off!\n")
+			deadlineTime, err := time.Parse("01 02 2006 03:04PM -0700", alarm.Deadline)
+			if err != nil {
+				fmt.Println(err)
+			}
+			switch alarm.LoopFreq {
+			case "daily":
+				alarm.ChannelID = server.MainChannel
+				alarm.Deadline = deadlineTime.AddDate(0, 0, 1).Format("01 02 2006 03:04PM -0700")
+				go UserManager.GetUser(alarm.UserID, s, ServerManager).AlarmManager.SetAlarm(&alarm, s, server.MainChannel)
+			case "weekly":
+				alarm.ChannelID = server.MainChannel
+				alarm.Deadline = deadlineTime.AddDate(0, 0, 7).Format("01 02 2006 03:04PM -0700")
+				go UserManager.GetUser(alarm.UserID, s, ServerManager).AlarmManager.SetAlarm(&alarm, s, server.MainChannel)
+			case "monthly":
+				alarm.ChannelID = server.MainChannel
+				alarm.Deadline = deadlineTime.AddDate(0, 1, 0).Format("01 02 2006 03:04PM -0700")
+				go UserManager.GetUser(alarm.UserID, s, ServerManager).AlarmManager.SetAlarm(&alarm, s, server.MainChannel)
+			case "yearly":
+				alarm.ChannelID = server.MainChannel
+				alarm.Deadline = deadlineTime.AddDate(1, 0, 0).Format("01 02 2006 03:04PM -0700")
+				go UserManager.GetUser(alarm.UserID, s, ServerManager).AlarmManager.SetAlarm(&alarm, s, server.MainChannel)
+			}
 		}
 		var splitMessage func(aList []string)
 
@@ -1365,7 +1794,7 @@ func main() {
 	s.AddHandler(messageCreate)
 
 	// In this example, we only care about receiving message events.
-	s.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages
+	s.Identify.Intents = discordgo.IntentsGuildMessages | discordgo.IntentsDirectMessages | discordgo.IntentsGuildMembers | discordgo.IntentsAll
 
 	// Open a websocket connection to Discord and begin listening.
 	err = s.Open()
@@ -1380,15 +1809,14 @@ func main() {
 	SendExpiredAlarms()
 	DeleteExpiredAlarms()
 	DeleteAlarms()
+	defer SaveAlarms()
+	defer SaveServers()
 
 	// borrowed code
 	fmt.Println("Bot is now running. Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
-
-	SaveAlarms()
-	SaveServers()
 	// Cleanly close down the Discord session.
 	s.Close()
 	//END
