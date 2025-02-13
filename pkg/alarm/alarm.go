@@ -34,7 +34,7 @@ func (m *AlarmManager) SetAlarm(alarm *Alarm, session *discordgo.Session, channe
 	alarmIndex := len(m.Alarms) - 1
 	deadlineTime, err := time.Parse("01 02 2006 03:04PM -0700", alarm.Deadline)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println(err, "No this one")
 	}
 	timer1 := time.NewTimer(time.Until(deadlineTime))
 	<-timer1.C

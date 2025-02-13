@@ -1411,7 +1411,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			// parse deadline
 			parsedTime, err := time.Parse("01 02 2006 03:04PM -0700", dline)
 			if err != nil {
-				fmt.Println(err)
+				fmt.Println(err, "this one")
 			}
 			//convert deadline to unix
 			unixTime := parsedTime.Unix()
