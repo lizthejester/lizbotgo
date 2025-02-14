@@ -196,6 +196,8 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 	sc.Scan()
 	fmt.Println(sc.Text())*/
 	// calendar
+
+	// lizdate
 	if strings.HasPrefix(lowered, "lizdate") {
 		if len(lowered) == 7 {
 			currentYear, currentMonth, currentDay := time.Now().Local().Date()
@@ -233,9 +235,12 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 		}
 		fmt.Println("gregday:", gregDay)
 
-		gregMonth := userInput[(firstSpaceIndex + 1):(secondSpaceIndex)]
+		gregMonth := lowered[(firstSpaceIndex + 1):(secondSpaceIndex)]
+		if len(gregMonth) == 1 {
+			gregMonth = "0" + gregMonth
+		}
 		switch gregMonth {
-		case "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December":
+		case "january", "jan", "01", "february", "feb", "02", "march", "mar", "03", "april", "apr", "04", "may", "05", "june", "jun", "06", "july", "jul", "07", "august", "aug", "08", "september", "sept", "sep", "09", "october", "oct", "10", "november", "nov", "11", "december", "dec", "12":
 
 		default:
 			return "Formatting error; Second argument should be a Gregorian month (i.e. January)"
@@ -252,6 +257,7 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 		response := strconv.Itoa(lizDay) + " " + lizMonth + ", " + ltime.GetDayOfWeek(lizDay, lizMonth)
 		return response
 	}
+	// set alarms
 	if strings.HasPrefix(lowered, "set alarm for") {
 		// example command: "set alarm for (month) (day) (year) ((time)AM/PM) (timezone) ("name") (loop frequency) ("comment string")"
 		// note: use of military time does not require colon in time, declaration of AM/PM, but does require timezones.
@@ -1424,10 +1430,15 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 			return wrongSyntaxMessage
 		}
 	}
-	if lowered == "list my alarms" {
+	// list alarms
+	switch lowered {
+	case "list my alarms", "list alarms", "see alarms", "see my alarms":
 		ListAlarms(m.Author.ID, m.ChannelID)
+	default:
 		return "No response"
 	}
+
+	// delete alarms
 	if strings.HasPrefix(lowered, "delete alarm") {
 		index, err := strconv.Atoi(lowered[13:])
 		if err != nil {
@@ -1508,20 +1519,20 @@ func ListAlarms(userid string, channelid string) {
 
 		lizianMonth, lizianDay := ltime.GetDayMonth(gYear, gMonth, gDay)
 		// concatenate alarmlist entry and append to alarmlist
-		alarmlist = append(alarmlist, "- "+"Alarm "+strconv.Itoa(i+1)+": "+v.Name+" <t:"+strconv.FormatInt(unixTime, 10)+":F> "+v.Content+" "+v.LoopFreq+"\n")
-		Lalarmlist = append(Lalarmlist, "- "+"Alarm "+strconv.Itoa(i+1)+": "+v.Name+" "+lizianMonth+" "+strconv.Itoa(lizianDay)+" "+dlYear+" <t:"+strconv.FormatInt(unixTime, 10)+":t> "+ltime.GetDayOfWeek(lizianDay, lizianMonth)+"\n")
+		alarmlist = append(alarmlist, "- "+"-# **Alarm "+strconv.Itoa(i+1)+": "+v.Name+"** \n"+"<t:"+strconv.FormatInt(unixTime, 10)+":F>\n"+"-# \""+v.Content+"\" \n "+v.LoopFreq+"\n")
+		Lalarmlist = append(Lalarmlist, "- "+"-# **Alarm "+strconv.Itoa(i+1)+": "+v.Name+"** \n"+"`"+ltime.GetDayOfWeek(lizianDay, lizianMonth)+", "+lizianMonth+" "+strconv.Itoa(lizianDay)+", "+dlYear+"` <t:"+strconv.FormatInt(unixTime, 10)+":t> \n"+"-# \""+v.Content+"\" \n "+v.LoopFreq+" \n")
 	}
 	// splits message in to 8 alarms per message
-	messagecounter := 0
+	hasheader := true
 	var splitMessage func(aList []string)
 	splitMessage = func(aList []string) {
-		header := "**Alarms(Gregorian Time):** \n"
+		header := "## Alarms(Gregorian Time): \n"
 		if len(aList) > 8 {
 			var divMessage string
 			for _, v := range aList[:8] {
-				messagecounter += 1
-				if messagecounter == 1 {
+				if hasheader {
 					divMessage = header + divMessage + v
+					hasheader = false
 				} else {
 					divMessage = divMessage + v
 				}
@@ -1529,31 +1540,32 @@ func ListAlarms(userid string, channelid string) {
 			s.ChannelMessageSend(channelid, divMessage)
 			splitMessage(aList[8:])
 		} else if len(aList) == 0 {
-			divMessage := "No alarms! :)"
-			s.ChannelMessageSend(channelid, divMessage)
+			/*divMessage := "No response"
+			s.ChannelMessageSend(channelid, divMessage)*/
 		} else {
 			var divMessage string
 			for _, v := range aList {
-				if messagecounter > 1 {
-					divMessage = divMessage + v
-				} else {
+				if hasheader {
 					divMessage = header + divMessage + v
+					hasheader = false
+				} else {
+					divMessage = divMessage + v
 				}
 			}
 			s.ChannelMessageSend(channelid, divMessage)
 		}
 	}
 	// separate splitter for Lizian times (necessary for formatting)
-	Lmessagecounter := 0
+	placeheader := true
 	var splitMessageL func(aList []string)
 	splitMessageL = func(aList []string) {
-		header := "**Alarms(Lizian Time):** \n"
+		header := "## Alarms(Lizian Time): \n"
 		if len(aList) > 8 {
 			var divMessage string
 			for _, v := range aList[:8] {
-				Lmessagecounter += 1
-				if Lmessagecounter == 1 {
+				if placeheader {
 					divMessage = header + divMessage + v
+					placeheader = false
 				} else {
 					divMessage = divMessage + v
 				}
@@ -1566,10 +1578,11 @@ func ListAlarms(userid string, channelid string) {
 		} else {
 			var divMessage string
 			for _, v := range aList {
-				if Lmessagecounter > 1 {
-					divMessage = divMessage + v
-				} else {
+				if placeheader {
 					divMessage = header + divMessage + v
+					placeheader = false
+				} else {
+					divMessage = divMessage + v
 				}
 			}
 			s.ChannelMessageSend(channelid, divMessage)
