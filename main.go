@@ -199,13 +199,6 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 
 	// lizdate
 	if strings.HasPrefix(lowered, "lizdate") {
-		if len(lowered) == 7 {
-			currentYear, currentMonth, currentDay := time.Now().Local().Date()
-			lizMonth, lizDay := ltime.GetDayMonth(currentYear, currentMonth.String(), currentDay)
-			fmt.Println("Current date:", lizMonth, lizDay, ltime.GetDayOfWeek(lizDay, lizMonth))
-			response := "Current date: " + strconv.Itoa(lizDay) + " " + lizMonth + ", " + ltime.GetDayOfWeek(lizDay, lizMonth)
-			return response
-		}
 
 		var firstSpaceIndex int
 		var secondSpaceIndex int
@@ -253,9 +246,18 @@ func getResponse(s *discordgo.Session, m *discordgo.MessageCreate, userInput str
 		}
 		fmt.Println("gregyear:", gregYear)
 
-		lizMonth, lizDay := ltime.GetDayMonth(gregYear, gregMonth, gregDay)
-		response := strconv.Itoa(lizDay) + " " + lizMonth + ", " + ltime.GetDayOfWeek(lizDay, lizMonth)
-		return response
+		if len(lowered) == 7 {
+			currentYear, currentMonth, currentDay := time.Now().Local().Date()
+			lizMonth, lizDay := ltime.GetDayMonth(currentYear, currentMonth.String(), currentDay)
+			fmt.Println("Current date: ", lizMonth, lizDay, ltime.GetDayOfWeek(lizDay, lizMonth))
+			response := "Current date: " + ltime.GetDayOfWeek(lizDay, lizMonth) + strconv.Itoa(lizDay) + " " + lizMonth + ", " + strconv.Itoa(gregYear)
+			return response
+		} else {
+
+			lizMonth, lizDay := ltime.GetDayMonth(gregYear, gregMonth, gregDay)
+			response := ltime.GetDayOfWeek(lizDay, lizMonth) + strconv.Itoa(lizDay) + " " + lizMonth + ", " + strconv.Itoa(gregYear)
+			return response
+		}
 	}
 	// set alarms
 	if strings.HasPrefix(lowered, "set alarm for") {
